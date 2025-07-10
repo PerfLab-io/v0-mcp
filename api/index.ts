@@ -10,6 +10,14 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { InMemoryEventStore } from "@modelcontextprotocol/sdk/examples/shared/inMemoryEventStore.js";
 import { randomUUID } from "crypto";
 import { z } from "zod";
+import {
+  createChat,
+  createChatSchema,
+  getUserInfo,
+  getUserInfoSchema,
+  createProject,
+  createProjectSchema,
+} from "../v0/index.js";
 
 export const config = {
   runtime: "edge",
@@ -28,21 +36,9 @@ server.registerTool(
   {
     title: "Create v0 Chat",
     description: "Create a new v0 chat session with AI",
-    inputSchema: {
-      message: z.string().describe("The message to send to v0"),
-      system: z.string().optional().describe("System prompt for the chat"),
-    },
+    inputSchema: createChatSchema.shape,
   },
-  async (inputs) => ({
-    content: [
-      {
-        type: "text",
-        text: `Would create v0 chat with message: ${inputs.message}${
-          inputs.system ? ` (system: ${inputs.system})` : ""
-        }`,
-      },
-    ],
-  })
+  createChat
 );
 
 server.registerTool(
@@ -50,16 +46,9 @@ server.registerTool(
   {
     title: "Get v0 User Info",
     description: "Retrieve user information from v0",
-    inputSchema: {},
+    inputSchema: getUserInfoSchema.shape,
   },
-  async () => ({
-    content: [
-      {
-        type: "text",
-        text: "Would retrieve v0 user information",
-      },
-    ],
-  })
+  getUserInfo
 );
 
 server.registerTool(
@@ -67,21 +56,9 @@ server.registerTool(
   {
     title: "Create v0 Project",
     description: "Create a new project in v0",
-    inputSchema: {
-      name: z.string().describe("The project name"),
-      description: z.string().optional().describe("Project description"),
-    },
+    inputSchema: createProjectSchema.shape,
   },
-  async (inputs) => ({
-    content: [
-      {
-        type: "text",
-        text: `Would create v0 project: ${inputs.name}${
-          inputs.description ? ` - ${inputs.description}` : ""
-        }`,
-      },
-    ],
-  })
+  createProject
 );
 
 server.registerResource(
