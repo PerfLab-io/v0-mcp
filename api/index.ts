@@ -9,7 +9,6 @@ import {
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { InMemoryEventStore } from "@modelcontextprotocol/sdk/examples/shared/inMemoryEventStore.js";
 import { randomUUID } from "crypto";
-import { z } from "zod";
 import {
   createChat,
   createChatSchema,
@@ -170,37 +169,17 @@ app.post("/", async (c) => {
       await server.connect(transport);
     }
 
-    const mockRequest = {
-      body: JSON.stringify(await c.req.json()),
-      headers: Object.fromEntries(c.req.header()),
-    };
+    await transport.handleRequest(c.req as any, c.res as any);
 
-    const mockResponse = {
-      statusCode: 200,
-      headers: {} as Record<string, string>,
-      body: "",
-      setHeader: (name: string, value: string) => {
-        mockResponse.headers[name] = value;
-      },
-      writeHead: (status: number) => {
-        mockResponse.statusCode = status;
-      },
-      end: (data: string) => {
-        mockResponse.body = data;
-      },
-    };
-
-    await transport.handleRequest(mockRequest as any, mockResponse as any);
-
-    const responseData = mockResponse.body ? JSON.parse(mockResponse.body) : {};
+    const responseData = await c.res.json();
     const responseHeaders: Record<string, string> = {};
 
-    if (mockResponse.headers["x-mcp-session-id"]) {
+    if (c.res.headers.get("x-mcp-session-id")) {
       responseHeaders["x-mcp-session-id"] =
-        mockResponse.headers["x-mcp-session-id"];
+        c.res.headers.get("x-mcp-session-id") || "";
     }
 
-    return c.json(responseData, mockResponse.statusCode, responseHeaders);
+    return c.json(responseData, c.res.status as any, responseHeaders);
   } catch (error) {
     console.error("Error handling POST request:", error);
     return c.json(
@@ -231,38 +210,11 @@ app.get("/stream/:sessionId", async (c) => {
       );
     }
 
-    const mockRequest = {
-      url: `/stream/${sessionId}`,
-      method: "GET",
-      headers: Object.fromEntries(c.req.header()),
-    };
+    await transport.handleRequest(c.req as any, c.res as any);
 
-    const mockResponse = {
-      statusCode: 200,
-      headers: {} as Record<string, string>,
-      body: "",
-      setHeader: (name: string, value: string) => {
-        mockResponse.headers[name] = value;
-      },
-      writeHead: (status: number, headers?: Record<string, string>) => {
-        mockResponse.statusCode = status;
-        if (headers) {
-          Object.assign(mockResponse.headers, headers);
-        }
-      },
-      write: (chunk: string) => {
-        mockResponse.body += chunk;
-      },
-      end: (data?: string) => {
-        if (data) mockResponse.body += data;
-      },
-    };
-
-    await transport.handleRequest(mockRequest as any, mockResponse as any);
-
-    return new Response(mockResponse.body, {
-      status: mockResponse.statusCode,
-      headers: mockResponse.headers,
+    return new Response(c.res.body, {
+      status: c.res.status as any,
+      headers: c.res.headers,
     });
   } catch (error) {
     console.error("Error handling GET request:", error);
@@ -284,35 +236,12 @@ app.delete("/:sessionId", async (c) => {
       return c.json({ error: "Session not found" }, 404);
     }
 
-    const mockRequest = {
-      url: `/${sessionId}`,
-      method: "DELETE",
-      headers: Object.fromEntries(c.req.header()),
-    };
-
-    const mockResponse = {
-      statusCode: 200,
-      headers: {} as Record<string, string>,
-      body: "",
-      setHeader: (name: string, value: string) => {
-        mockResponse.headers[name] = value;
-      },
-      writeHead: (status: number) => {
-        mockResponse.statusCode = status;
-      },
-      end: (data: string) => {
-        mockResponse.body = data;
-      },
-    };
-
-    await transport.handleRequest(mockRequest as any, mockResponse as any);
+    await transport.handleRequest(c.req as any, c.res as any);
 
     transports.delete(sessionId);
 
-    const responseData = mockResponse.body
-      ? JSON.parse(mockResponse.body)
-      : { message: "Session terminated" };
-    return c.json(responseData, mockResponse.statusCode);
+    const responseData = await c.res.json();
+    return c.json(responseData, c.res.status as any);
   } catch (error) {
     console.error("Error handling DELETE request:", error);
     return c.json(
