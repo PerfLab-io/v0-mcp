@@ -16,9 +16,16 @@ import {
   getUserInfoSchema,
   createProject,
   createProjectSchema,
+  createMessage,
+  createMessageSchema,
+  findChats,
+  findChatsSchema,
+  favoriteChat,
+  favoriteChatSchema,
 } from "../v0/index.js";
 import { sessionApiKeyStore } from "../v0/client.js";
 import { oauthProvider, oauthRouter } from "./oauth-provider.js";
+import { v0Prompts, getPromptContent } from "../prompts/index.js";
 interface Session {
   id: string;
   server: McpServer;
@@ -68,6 +75,36 @@ function createMcpServer(): McpServer {
       inputSchema: createProjectSchema.shape,
     },
     createProject
+  );
+
+  server.registerTool(
+    "create_message",
+    {
+      title: "Create v0 Chat Message",
+      description: "Add a new message to an existing v0 chat",
+      inputSchema: createMessageSchema.shape,
+    },
+    createMessage
+  );
+
+  server.registerTool(
+    "find_chats",
+    {
+      title: "Find v0 Chats",
+      description: "Search and list v0 chats with optional filtering",
+      inputSchema: findChatsSchema.shape,
+    },
+    findChats
+  );
+
+  server.registerTool(
+    "favorite_chat",
+    {
+      title: "Favorite/Unfavorite v0 Chat",
+      description: "Mark a v0 chat as favorite or remove from favorites",
+      inputSchema: favoriteChatSchema.shape,
+    },
+    favoriteChat
   );
 
   server.registerResource(
@@ -347,6 +384,9 @@ app.post("/mcp", async (c) => {
             tools: {
               listChanged: false,
             },
+            prompts: {
+              listChanged: false,
+            },
           },
           serverInfo: {
             name: "v0-mcp",
@@ -495,6 +535,63 @@ app.post("/mcp", async (c) => {
                   required: ["name"],
                 },
               },
+              {
+                name: "create_message",
+                description: "Add a new message to an existing v0 chat",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    chatId: {
+                      type: "string",
+                      description: "The ID of the chat to add a message to",
+                    },
+                    message: {
+                      type: "string",
+                      description: "The message content to send",
+                    },
+                  },
+                  required: ["chatId", "message"],
+                },
+              },
+              {
+                name: "find_chats",
+                description: "Search and list v0 chats with optional filtering",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    limit: {
+                      type: "string",
+                      description: "Maximum number of chats to return",
+                    },
+                    offset: {
+                      type: "string",
+                      description: "Number of chats to skip for pagination",
+                    },
+                    isFavorite: {
+                      type: "string",
+                      description: "Filter by favorite status (true/false)",
+                    },
+                  },
+                },
+              },
+              {
+                name: "favorite_chat",
+                description: "Mark a v0 chat as favorite or remove from favorites",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    chatId: {
+                      type: "string",
+                      description: "The ID of the chat to favorite/unfavorite",
+                    },
+                    isFavorite: {
+                      type: "boolean",
+                      description: "Whether to favorite (true) or unfavorite (false) the chat",
+                    },
+                  },
+                  required: ["chatId", "isFavorite"],
+                },
+              },
             ],
           },
         };
@@ -513,6 +610,12 @@ app.post("/mcp", async (c) => {
             result = await getUserInfo();
           } else if (toolName === "create_project") {
             result = await createProject(args);
+          } else if (toolName === "create_message") {
+            result = await createMessage(args);
+          } else if (toolName === "find_chats") {
+            result = await findChats(args);
+          } else if (toolName === "favorite_chat") {
+            result = await favoriteChat(args);
           } else {
             throw new Error(`Unknown tool: ${toolName}`);
           }
@@ -530,6 +633,64 @@ app.post("/mcp", async (c) => {
               code: -32603,
               message: error.message || "Tool execution failed",
               data: error.stack,
+            },
+          };
+        }
+        break;
+      }
+
+      case "prompts/list": {
+        const offset = parseInt(requestData.params?.cursor || "0");
+        const limit = Math.min(parseInt(requestData.params?.limit || "10"), 100);
+        
+        const allPrompts = v0Prompts;
+        const paginatedPrompts = allPrompts.slice(offset, offset + limit);
+        const hasMore = offset + limit < allPrompts.length;
+        
+        response = {
+          jsonrpc: "2.0" as const,
+          id: requestData.id,
+          result: {
+            prompts: paginatedPrompts,
+            nextCursor: hasMore ? (offset + limit).toString() : undefined,
+          },
+        };
+        break;
+      }
+
+      case "prompts/get": {
+        const promptName = requestData.params?.name;
+        const args = requestData.params?.arguments || {};
+        
+        if (!promptName) {
+          response = {
+            jsonrpc: "2.0" as const,
+            id: requestData.id,
+            error: {
+              code: -32602,
+              message: "Missing required parameter: name",
+            },
+          };
+          break;
+        }
+        
+        try {
+          const promptContent = await getPromptContent(promptName, args);
+          
+          response = {
+            jsonrpc: "2.0" as const,
+            id: requestData.id,
+            result: {
+              messages: [promptContent],
+            },
+          };
+        } catch (error: any) {
+          response = {
+            jsonrpc: "2.0" as const,
+            id: requestData.id,
+            error: {
+              code: -32602,
+              message: error.message || "Unknown prompt",
             },
           };
         }
