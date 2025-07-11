@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { v0 } from "v0-sdk";
 
 const apiKey = process.env.V0_API_KEY;
