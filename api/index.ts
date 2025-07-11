@@ -17,6 +17,7 @@ import {
   createProject,
   createProjectSchema,
 } from "../v0/index.js";
+import { sessionApiKeyStore } from "../v0/client.js";
 
 // Session management interface
 interface Session {
@@ -192,6 +193,25 @@ app.use(
 
 app.use("/*", logger());
 
+// OAuth middleware for API key extraction
+app.use("/mcp", async (c, next) => {
+  const authHeader = c.req.header("Authorization");
+  const sessionId = c.req.header("mcp-session-id");
+  
+  // Extract API key from Bearer token
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const apiKey = authHeader.substring(7);
+    
+    // Store API key in session store if sessionId is available
+    if (sessionId) {
+      sessionApiKeyStore.setSessionApiKey(sessionId, apiKey);
+      console.log(`API key stored for session: ${sessionId}`);
+    }
+  }
+  
+  await next();
+});
+
 // Health check endpoint
 app.get("/ping", (c) => {
   return c.json({
@@ -224,6 +244,9 @@ app.post("/mcp", async (c) => {
       "clientType:",
       session.clientType
     );
+
+    // Set current session in the API key store
+    sessionApiKeyStore.setCurrentSession(session.id);
 
     // Always set the session ID header in the response
     c.header("mcp-session-id", session.id);
@@ -581,7 +604,10 @@ app.delete("/mcp", (c) => {
   const sessionId = c.req.header("mcp-session-id");
 
   if (sessionId && sessions.has(sessionId)) {
+    // Clean up session from both stores
     sessions.delete(sessionId);
+    sessionApiKeyStore.clearSession(sessionId);
+    console.log(`Session ${sessionId} terminated and cleaned up`);
     return c.text("", 200);
   }
 
