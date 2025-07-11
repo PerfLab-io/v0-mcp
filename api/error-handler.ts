@@ -1,10 +1,13 @@
 export function handleApiKeyError(error: unknown) {
-  if (error instanceof Error && error.message.includes("V0_API_KEY")) {
+  if (error instanceof Error && 
+      (error.message.includes("V0_API_KEY") || 
+       error.message.includes("API key") || 
+       error.message.includes("No API key"))) {
     return {
       content: [
         {
           type: "text" as const,
-          text: "Error: V0_API_KEY environment variable is required. Please set your v0.dev API key in the environment variables.",
+          text: "Error: No API key available. This should not happen if OAuth flow is working correctly. Please ensure the client is properly authorized.",
         },
       ],
       isError: true,

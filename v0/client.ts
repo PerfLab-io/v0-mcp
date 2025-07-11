@@ -1,10 +1,7 @@
-import "dotenv/config";
-
 export type APIKeyOptions = {
   apiKey?: string;
 };
 
-// Memoized singleton for session API key storage
 class SessionApiKeyStore {
   private static instance: SessionApiKeyStore;
   private sessionKeys = new Map<string, string>();
@@ -359,7 +356,6 @@ export interface UserGetScopesResponse {
   data: ScopeSummary[];
 }
 
-// Implementation
 const BASE_URL = "https://api.v0.dev/v1" as const;
 
 interface FetcherParams {
@@ -378,14 +374,13 @@ async function fetcher(
     ? "?" + new URLSearchParams(params.query).toString()
     : "";
   const finalUrl = BASE_URL + url + queryString;
-  
-  // Try to get API key from: params > current session > environment
-  const apiKey = params.apiKey || 
-    sessionApiKeyStore.getCurrentSessionApiKey() || 
-    process.env.V0_API_KEY;
+
+  const apiKey = params.apiKey || sessionApiKeyStore.getCurrentSessionApiKey();
 
   if (!apiKey) {
-    throw new Error("API key is required. Provide via Authorization header, session, or V0_API_KEY environment variable");
+    throw new Error(
+      "API key is required. Provide via Authorization header, session, or V0_API_KEY environment variable"
+    );
   }
 
   const hasBody = method !== "GET" && params.body;

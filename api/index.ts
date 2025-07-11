@@ -18,8 +18,7 @@ import {
   createProjectSchema,
 } from "../v0/index.js";
 import { sessionApiKeyStore } from "../v0/client.js";
-
-// Session management interface
+import { oauthProvider, oauthRouter } from "./oauth-provider.js";
 interface Session {
   id: string;
   server: McpServer;
@@ -35,7 +34,6 @@ interface Session {
 
 const sessions = new Map<string, Session>();
 
-// Create MCP server with v0 capabilities
 function createMcpServer(): McpServer {
   const server = new McpServer({
     name: "v0-mcp",
@@ -130,7 +128,6 @@ function createMcpServer(): McpServer {
   return server;
 }
 
-// Helper to get or create session
 function getSession(
   sessionId?: string,
   clientInfo?: { name: string; version: string }
@@ -151,11 +148,9 @@ function getSession(
     }
   }
 
-  // Create new session
   const newSessionId = randomUUID();
   console.log("Creating new session with ID:", newSessionId);
 
-  // Determine client type based on client info
   const clientType: "mcpserver" | "generic" =
     clientInfo?.name === "v0-mcp" ? "mcpserver" : "generic";
 
@@ -180,35 +175,103 @@ function getSession(
 
 const app = new Hono();
 
-// CORS middleware
 app.use(
   "*",
   cors({
     origin: "*",
     allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization", "mcp-session-id"],
-    exposeHeaders: ["mcp-session-id"],
+    exposeHeaders: ["mcp-session-id", "www-authenticate"],
   })
 );
 
 app.use("/*", logger());
 
-// OAuth middleware for API key extraction
+app.route("/oauth", oauthRouter);
+
+app.get("/.well-known/oauth-authorization-server", (c) => {
+  const protocol = c.req.header("x-forwarded-proto") || "http";
+  const host = c.req.header("host") || "localhost:3000";
+  const baseUrl = `${protocol}://${host}`;
+  return c.json(
+    oauthProvider.getAuthorizationServerMetadata(`${baseUrl}/oauth`)
+  );
+});
+
 app.use("/mcp", async (c, next) => {
   const authHeader = c.req.header("Authorization");
   const sessionId = c.req.header("mcp-session-id");
-  
-  // Extract API key from Bearer token
+  const protocol = c.req.header("x-forwarded-proto") || "http";
+  const host = c.req.header("host") || "localhost:3000";
+  const baseUrl = `${protocol}://${host}`;
+
+  // Check if authorization is required and present
   if (authHeader && authHeader.startsWith("Bearer ")) {
-    const apiKey = authHeader.substring(7);
-    
-    // Store API key in session store if sessionId is available
-    if (sessionId) {
-      sessionApiKeyStore.setSessionApiKey(sessionId, apiKey);
-      console.log(`API key stored for session: ${sessionId}`);
+    const token = authHeader.substring(7);
+
+    // Validate token using OAuth provider
+    const accessToken = oauthProvider.validateToken(token);
+    if (!accessToken) {
+      // Invalid token - return 401 with proper WWW-Authenticate header
+      const authServerUrl = `${baseUrl}/oauth`;
+      const resourceMetadataUrl = `${baseUrl}/.well-known/oauth-protected-resource`;
+
+      c.header(
+        "WWW-Authenticate",
+        `Bearer realm="${baseUrl}", authorization_uri="${authServerUrl}/authorize", resource_metadata_url="${resourceMetadataUrl}"`
+      );
+      return c.json(
+        {
+          jsonrpc: "2.0",
+          error: {
+            code: -32000,
+            message: "Invalid access token",
+            data: {
+              type: "auth_error",
+              authorization_uri: `${authServerUrl}/authorize`,
+              resource_metadata_url: resourceMetadataUrl,
+            },
+          },
+          id: null,
+        },
+        401
+      );
     }
+
+    // Valid token - store API key for this session
+    if (sessionId) {
+      sessionApiKeyStore.setSessionApiKey(sessionId, accessToken.v0ApiKey);
+      console.log(
+        `Valid OAuth token - API key stored for session: ${sessionId}`
+      );
+    }
+  } else {
+    // No authorization header - ALWAYS require OAuth per MCP spec (Step 2 in sequence diagram)
+    const authServerUrl = `${baseUrl}/oauth`;
+    const resourceMetadataUrl = `${baseUrl}/.well-known/oauth-protected-resource`;
+
+    c.header(
+      "WWW-Authenticate",
+      `Bearer realm="${baseUrl}", authorization_uri="${authServerUrl}/authorize", resource_metadata_url="${resourceMetadataUrl}"`
+    );
+    return c.json(
+      {
+        jsonrpc: "2.0",
+        error: {
+          code: -32000,
+          message: "Authorization required",
+          data: {
+            type: "auth_error",
+            authorization_uri: `${authServerUrl}/authorize`,
+            resource_metadata_url: resourceMetadataUrl,
+          },
+        },
+        id: null,
+      },
+      401
+    );
   }
-  
+
   await next();
 });
 
@@ -220,6 +283,17 @@ app.get("/ping", (c) => {
     sessions: sessions.size,
     timestamp: new Date().toISOString(),
   });
+});
+
+// OAuth Protected Resource Metadata endpoint (Step 4 in sequence diagram)
+app.get("/.well-known/oauth-protected-resource", (c) => {
+  const protocol = c.req.header("x-forwarded-proto") || "http";
+  const host = c.req.header("host") || "localhost:3000";
+  const baseUrl = `${protocol}://${host}`;
+  const authServerUrl = `${baseUrl}/oauth`;
+  return c.json(
+    oauthProvider.getProtectedResourceMetadata(baseUrl, authServerUrl)
+  );
 });
 
 // Handle MCP POST requests
@@ -247,6 +321,12 @@ app.post("/mcp", async (c) => {
 
     // Set current session in the API key store
     sessionApiKeyStore.setCurrentSession(session.id);
+
+    // Ensure we have an API key available for this session
+    const currentApiKey = sessionApiKeyStore.getCurrentSessionApiKey();
+    if (!currentApiKey) {
+      console.log(`Warning: No API key available for session ${session.id}`);
+    }
 
     // Always set the session ID header in the response
     c.header("mcp-session-id", session.id);
@@ -636,8 +716,15 @@ async function main() {
 
   console.log(`🚀 v0 MCP Server running on http://localhost:${port}/mcp`);
   console.log("📡 Streamable HTTP transport ready");
-  console.log("🔗 Endpoint: POST/GET http://localhost:3000/mcp");
-  console.log("💓 Health check: GET http://localhost:3000/mcp/ping");
+  console.log("🔗 MCP Endpoint: POST/GET http://localhost:3000/mcp");
+  console.log("🔐 OAuth Authorization: http://localhost:3000/oauth/authorize");
+  console.log(
+    "🔍 OAuth Metadata: http://localhost:3000/.well-known/oauth-authorization-server"
+  );
+  console.log(
+    "🛡️  Resource Metadata: http://localhost:3000/.well-known/oauth-protected-resource"
+  );
+  console.log("💓 Health check: GET http://localhost:3000/ping");
 
   serve({
     fetch: app.fetch,

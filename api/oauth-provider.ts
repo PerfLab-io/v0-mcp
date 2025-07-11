@@ -1,0 +1,372 @@
+import { randomUUID } from "crypto";
+import { Hono } from "hono";
+import { sessionApiKeyStore } from "../v0/client.js";
+
+interface AuthorizationCode {
+  code: string;
+  clientId: string;
+  redirectUri: string;
+  codeChallenge: string;
+  codeChallengeMethod: string;
+  scope: string;
+  createdAt: Date;
+  expiresAt: Date;
+  v0ApiKey?: string; // Store the V0 API key provided during auth
+}
+
+interface AccessToken {
+  token: string;
+  clientId: string;
+  scope: string;
+  createdAt: Date;
+  expiresAt: Date;
+  v0ApiKey: string; // The actual V0 API key
+}
+
+class V0OAuthProvider {
+  private authCodes = new Map<string, AuthorizationCode>();
+  private accessTokens = new Map<string, AccessToken>();
+  private readonly TOKEN_EXPIRES_IN = 3600; // 1 hour
+  private readonly CODE_EXPIRES_IN = 600; // 10 minutes
+
+  generateAuthorizationCode(
+    clientId: string,
+    redirectUri: string,
+    codeChallenge: string,
+    codeChallengeMethod: string,
+    scope: string,
+    v0ApiKey: string
+  ): string {
+    const code = randomUUID();
+    const authCode: AuthorizationCode = {
+      code,
+      clientId,
+      redirectUri,
+      codeChallenge,
+      codeChallengeMethod,
+      scope,
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + this.CODE_EXPIRES_IN * 1000),
+      v0ApiKey,
+    };
+
+    this.authCodes.set(code, authCode);
+    return code;
+  }
+
+  exchangeCodeForToken(
+    code: string,
+    clientId: string,
+    redirectUri: string,
+    codeVerifier: string
+  ): AccessToken | null {
+    const authCode = this.authCodes.get(code);
+    if (!authCode) return null;
+
+    // Validate authorization code
+    if (
+      authCode.clientId !== clientId ||
+      authCode.redirectUri !== redirectUri ||
+      authCode.expiresAt < new Date()
+    ) {
+      this.authCodes.delete(code);
+      return null;
+    }
+
+    // Validate PKCE
+    if (!this.validatePKCE(codeVerifier, authCode.codeChallenge, authCode.codeChallengeMethod)) {
+      this.authCodes.delete(code);
+      return null;
+    }
+
+    // Create access token using the V0 API key
+    const token = authCode.v0ApiKey!; // Use the V0 API key as the access token
+    const accessToken: AccessToken = {
+      token,
+      clientId,
+      scope: authCode.scope,
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + this.TOKEN_EXPIRES_IN * 1000),
+      v0ApiKey: authCode.v0ApiKey!,
+    };
+
+    this.accessTokens.set(token, accessToken);
+    this.authCodes.delete(code); // Remove used authorization code
+    return accessToken;
+  }
+
+  validateToken(token: string): AccessToken | null {
+    const accessToken = this.accessTokens.get(token);
+    if (!accessToken || accessToken.expiresAt < new Date()) {
+      if (accessToken) this.accessTokens.delete(token);
+      return null;
+    }
+    return accessToken;
+  }
+
+  private validatePKCE(verifier: string, challenge: string, method: string): boolean {
+    if (method === "plain") {
+      return verifier === challenge;
+    }
+    if (method === "S256") {
+      const crypto = require("crypto");
+      const hash = crypto.createHash("sha256").update(verifier).digest("base64url");
+      return hash === challenge;
+    }
+    return false;
+  }
+
+  getAuthorizationServerMetadata(baseUrl: string) {
+    return {
+      issuer: baseUrl,
+      authorization_endpoint: `${baseUrl}/authorize`,
+      token_endpoint: `${baseUrl}/token`,
+      introspection_endpoint: `${baseUrl}/introspect`,
+      scopes_supported: ["mcp:tools", "mcp:resources"],
+      response_types_supported: ["code"],
+      grant_types_supported: ["authorization_code"],
+      code_challenge_methods_supported: ["S256", "plain"],
+      token_endpoint_auth_methods_supported: ["none"], // Public client
+      authorization_response_iss_parameter_supported: true,
+      require_pushed_authorization_requests: false,
+      pushed_authorization_request_endpoint: null,
+      revocation_endpoint: `${baseUrl}/revoke`,
+      revocation_endpoint_auth_methods_supported: ["none"],
+      introspection_endpoint_auth_methods_supported: ["none"],
+      registration_endpoint: `${baseUrl}/register`
+    };
+  }
+
+  getProtectedResourceMetadata(baseUrl: string, authServerUrl: string) {
+    return {
+      resource: baseUrl,
+      authorization_servers: [authServerUrl],
+      scopes_supported: ["mcp:tools", "mcp:resources"],
+      bearer_methods_supported: ["header"],
+      resource_documentation: "https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization",
+      resource_policy_uri: `${baseUrl}/privacy-policy`,
+      resource_tos_uri: `${baseUrl}/terms-of-service`
+    };
+  }
+}
+
+export const oauthProvider = new V0OAuthProvider();
+
+// OAuth router
+export const oauthRouter = new Hono();
+
+// Authorization endpoint - presents form for API key input (Step 10 in sequence diagram)
+oauthRouter.get("/authorize", (c) => {
+  const {
+    client_id,
+    redirect_uri,
+    code_challenge,
+    code_challenge_method,
+    scope,
+    state,
+    resource, // Required by MCP spec
+  } = c.req.query();
+
+  if (!client_id || !redirect_uri || !code_challenge || !resource) {
+    return c.text("Missing required parameters (client_id, redirect_uri, code_challenge, resource)", 400);
+  }
+
+  // Return HTML form for API key input
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>V0 MCP Authorization</title>
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+            .form-group { margin: 15px 0; }
+            label { display: block; margin-bottom: 5px; font-weight: bold; }
+            input[type="text"], input[type="password"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+            button { background: #007cba; color: white; padding: 12px 24px; border: none; border-radius: 4px; cursor: pointer; }
+            button:hover { background: #005a8a; }
+            .info { background: #f0f8ff; padding: 15px; border-left: 4px solid #007cba; margin: 20px 0; }
+        </style>
+    </head>
+    <body>
+        <h1>V0 MCP Server Authorization</h1>
+        <div class="info">
+            <p><strong>Application:</strong> ${client_id}</p>
+            <p><strong>Requested Scopes:</strong> ${scope || 'mcp:tools mcp:resources'}</p>
+            <p>This application is requesting access to your V0 account. Please provide your V0 API key to authorize access.</p>
+            <p>You can obtain your API key from: <a href="https://v0.dev/chat/settings/keys" target="_blank">https://v0.dev/chat/settings/keys</a></p>
+        </div>
+        
+        <form method="POST" action="/oauth/authorize">
+            <input type="hidden" name="client_id" value="${client_id}">
+            <input type="hidden" name="redirect_uri" value="${redirect_uri}">
+            <input type="hidden" name="code_challenge" value="${code_challenge}">
+            <input type="hidden" name="code_challenge_method" value="${code_challenge_method || 'S256'}">
+            <input type="hidden" name="scope" value="${scope || 'mcp:tools mcp:resources'}">
+            <input type="hidden" name="state" value="${state || ''}">
+            <input type="hidden" name="resource" value="${resource}">
+            
+            <div class="form-group">
+                <label for="v0_api_key">V0 API Key:</label>
+                <input type="password" id="v0_api_key" name="v0_api_key" required placeholder="Enter your V0 API key">
+            </div>
+            
+            <button type="submit">Authorize Access</button>
+            <a href="${redirect_uri}?error=access_denied&state=${state || ''}" style="margin-left: 15px;">Cancel</a>
+        </form>
+    </body>
+    </html>
+  `;
+
+  return c.html(html);
+});
+
+// Handle authorization form submission (Step 11-12 in sequence diagram)
+oauthRouter.post("/authorize", async (c) => {
+  const formData = await c.req.formData();
+  const clientId = formData.get("client_id") as string;
+  const redirectUri = formData.get("redirect_uri") as string;
+  const codeChallenge = formData.get("code_challenge") as string;
+  const codeChallengeMethod = formData.get("code_challenge_method") as string || "S256";
+  const scope = formData.get("scope") as string || "mcp:tools mcp:resources";
+  const state = formData.get("state") as string || "";
+  const resource = formData.get("resource") as string; // Required by MCP spec
+  const v0ApiKey = formData.get("v0_api_key") as string;
+
+  if (!v0ApiKey) {
+    return c.text("V0 API key is required", 400);
+  }
+
+  if (!resource) {
+    return c.text("Resource parameter is required per MCP specification", 400);
+  }
+
+  // TODO: Validate the V0 API key by making a test request to V0
+  // For now, we'll accept any non-empty key
+
+  const code = oauthProvider.generateAuthorizationCode(
+    clientId,
+    redirectUri,
+    codeChallenge,
+    codeChallengeMethod,
+    scope,
+    v0ApiKey
+  );
+
+  const redirectUrl = new URL(redirectUri);
+  redirectUrl.searchParams.set("code", code);
+  if (state) redirectUrl.searchParams.set("state", state);
+  // Add iss parameter as recommended by OAuth 2.1
+  const protocol = c.req.header("x-forwarded-proto") || "http";
+  const host = c.req.header("host") || "localhost:3000";
+  redirectUrl.searchParams.set("iss", `${protocol}://${host}/oauth`);
+
+  return c.redirect(redirectUrl.toString());
+});
+
+// Token endpoint
+oauthRouter.post("/token", async (c) => {
+  const formData = await c.req.formData();
+  const grantType = formData.get("grant_type") as string;
+  const code = formData.get("code") as string;
+  const clientId = formData.get("client_id") as string;
+  const redirectUri = formData.get("redirect_uri") as string;
+  const codeVerifier = formData.get("code_verifier") as string;
+
+  if (grantType !== "authorization_code") {
+    return c.json({ error: "unsupported_grant_type" }, 400);
+  }
+
+  const accessToken = oauthProvider.exchangeCodeForToken(
+    code,
+    clientId,
+    redirectUri,
+    codeVerifier
+  );
+
+  if (!accessToken) {
+    return c.json({ error: "invalid_grant" }, 400);
+  }
+
+  return c.json({
+    access_token: accessToken.token,
+    token_type: "Bearer",
+    expires_in: 3600,
+    scope: accessToken.scope,
+  });
+});
+
+// Introspection endpoint
+oauthRouter.post("/introspect", async (c) => {
+  const formData = await c.req.formData();
+  const token = formData.get("token") as string;
+
+  if (!token) {
+    return c.json({ active: false });
+  }
+
+  const accessToken = oauthProvider.validateToken(token);
+  if (!accessToken) {
+    return c.json({ active: false });
+  }
+
+  return c.json({
+    active: true,
+    client_id: accessToken.clientId,
+    scope: accessToken.scope,
+    exp: Math.floor(accessToken.expiresAt.getTime() / 1000),
+    iat: Math.floor(accessToken.createdAt.getTime() / 1000),
+  });
+});
+
+// Dynamic Client Registration endpoint (RFC 7591)
+oauthRouter.post("/register", async (c) => {
+  try {
+    const registration = await c.req.json();
+    
+    // Generate client credentials
+    const clientId = `mcp-client-${randomUUID()}`;
+    const clientSecret = randomUUID(); // Optional for public clients
+    
+    // Validate redirect URIs
+    const redirectUris = registration.redirect_uris || [];
+    if (!Array.isArray(redirectUris) || redirectUris.length === 0) {
+      return c.json({
+        error: "invalid_redirect_uri",
+        error_description: "At least one redirect_uri is required"
+      }, 400);
+    }
+
+    // Create client registration response
+    const protocol = c.req.header("x-forwarded-proto") || "http";
+    const host = c.req.header("host") || "localhost:3000";
+    const baseUrl = `${protocol}://${host}/oauth`;
+    
+    const response = {
+      client_id: clientId,
+      client_secret: clientSecret,
+      client_id_issued_at: Math.floor(Date.now() / 1000),
+      client_secret_expires_at: 0, // Never expires
+      redirect_uris: redirectUris,
+      grant_types: ["authorization_code"],
+      response_types: ["code"],
+      client_name: registration.client_name || "MCP Client",
+      client_uri: registration.client_uri,
+      token_endpoint_auth_method: "none", // Public client
+      scope: "mcp:tools mcp:resources",
+      registration_client_uri: `${baseUrl}/clients/${clientId}`,
+      registration_access_token: randomUUID()
+    };
+
+    console.log(`Registered new client: ${clientId}`);
+    return c.json(response, 201);
+    
+  } catch (error) {
+    console.error("Client registration error:", error);
+    return c.json({
+      error: "invalid_request",
+      error_description: "Invalid client registration request"
+    }, 400);
+  }
+});
+
+// Note: Authorization server metadata endpoint is now mounted at root level in main app
