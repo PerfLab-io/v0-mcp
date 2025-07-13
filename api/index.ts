@@ -327,13 +327,16 @@ app.use("/mcp", async (c, next) => {
       );
     }
 
-    // Valid token - store API key for this session in database
+    // Valid token - retrieve API key from sessionApiKeyStore using the token
     if (sessionId) {
-      await sessionManager.setSessionApiKey(sessionId, accessToken.v0ApiKey);
-      sessionApiKeyStore.setSessionApiKey(sessionId, accessToken.v0ApiKey);
-      console.log(
-        `Valid OAuth token - API key stored for session: ${sessionId}`
-      );
+      const v0ApiKey = sessionApiKeyStore.getSessionApiKey(accessToken.token);
+      if (v0ApiKey) {
+        await sessionManager.setSessionApiKey(sessionId, v0ApiKey);
+        sessionApiKeyStore.setSessionApiKey(sessionId, v0ApiKey);
+        console.log(
+          `Valid OAuth token - API key stored for session: ${sessionId}`
+        );
+      }
     }
   } else {
     // No authorization header - ALWAYS require OAuth per MCP spec (Step 2 in sequence diagram)

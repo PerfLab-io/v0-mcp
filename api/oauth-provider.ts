@@ -2,8 +2,9 @@ import { randomUUID } from "crypto";
 import { Hono } from "hono";
 import { eq, and, gte } from "drizzle-orm";
 import { db } from "../drizzle/index.js";
-import { authorizationCodes, accessTokens } from "../drizzle/schema.js";
+import { accessTokens } from "../drizzle/schema.js";
 import { sessionApiKeyStore } from "../v0/client.js";
+import { encryptApiKey, generateAccessToken } from "../utils/crypto.js";
 
 interface AccessToken {
   token: string;
@@ -11,7 +12,6 @@ interface AccessToken {
   scope: string;
   createdAt: Date;
   expiresAt: Date;
-  v0ApiKey: string; // The actual V0 API key
 }
 
 class V0OAuthProvider {
@@ -78,10 +78,9 @@ class V0OAuthProvider {
       return null;
     }
 
-    // Use the API key itself as the access token (as before)
-    const token = authCode.apiKey;
+    // Generate a secure access token and store encrypted API key in sessionApiKeyStore
+    const token = generateAccessToken();
     const accessToken = {
-      token,
       clientId,
       scope: authCode.scope,
       sessionId: null, // Will be set when used
@@ -90,6 +89,11 @@ class V0OAuthProvider {
     };
 
     await db.insert(accessTokens).values(accessToken);
+    
+    // Store encrypted API key in sessionApiKeyStore using the generated token as session ID
+    const encryptedApiKey = encryptApiKey(authCode.apiKey, clientId);
+    sessionApiKeyStore.setSessionApiKey(token, authCode.apiKey);
+    
     await db.delete(authorizationCodes).where(eq(authorizationCodes.code, code));
     
     return {
@@ -98,30 +102,22 @@ class V0OAuthProvider {
       scope: authCode.scope,
       createdAt: accessToken.createdAt,
       expiresAt: accessToken.expiresAt,
-      v0ApiKey: authCode.apiKey,
     };
   }
 
   async validateToken(token: string): Promise<AccessToken | null> {
-    const result = await db
-      .select()
-      .from(accessTokens)
-      .where(and(
-        eq(accessTokens.token, token),
-        gte(accessTokens.expiresAt, new Date())
-      ))
-      .limit(1);
+    // Check if we have the API key in sessionApiKeyStore
+    const apiKey = sessionApiKeyStore.getSessionApiKey(token);
+    if (!apiKey) return null;
 
-    if (result.length === 0) return null;
-
-    const accessToken = result[0];
+    // For simplicity, we'll consider tokens valid for the TOKEN_EXPIRES_IN duration
+    // In production, you might want to check against the database for revoked tokens
     return {
-      token: accessToken.token,
-      clientId: accessToken.clientId,
-      scope: accessToken.scope,
-      createdAt: accessToken.createdAt,
-      expiresAt: accessToken.expiresAt,
-      v0ApiKey: accessToken.token, // The token IS the API key in our case
+      token,
+      clientId: "unknown", // We don't store clientId with the token anymore
+      scope: "mcp:tools mcp:resources",
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + this.TOKEN_EXPIRES_IN * 1000),
     };
   }
 

@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { eq, and, gte } from "drizzle-orm";
 import { db } from "../drizzle/index.js";
 import { sessions, accessTokens } from "../drizzle/schema.js";
-import { createApiKeyHash, verifyApiKey } from "../utils/crypto.js";
+import { encryptApiKey, decryptApiKey } from "../utils/crypto.js";
 
 export interface SessionData {
   id: string;
@@ -99,20 +99,28 @@ export class DatabaseSessionManager {
       createdAt: session.createdAt,
       lastActivity: session.lastActivity,
       isActive: session.isActive,
-      hasApiKey: Boolean(session.apiKeyHash),
+      hasApiKey: Boolean(session.encryptedApiKey),
     };
   }
 
   /**
-   * Store API key for a session (hashed using bcrypt)
+   * Store API key for a session (encrypted using client_id)
    */
   async setSessionApiKey(sessionId: string, apiKey: string): Promise<void> {
-    const hash = await createApiKeyHash(apiKey);
+    // Get the session to retrieve clientId for encryption
+    const session = await this.getSession(sessionId);
+    if (!session) {
+      throw new Error(`Session ${sessionId} not found`);
+    }
+
+    // Use clientId or sessionId as encryption key if clientId is not available
+    const encryptionKey = session.clientId || sessionId;
+    const encryptedApiKey = encryptApiKey(apiKey, encryptionKey);
     
     await db
       .update(sessions)
       .set({
-        apiKeyHash: hash,
+        encryptedApiKey: encryptedApiKey,
         lastActivity: new Date(),
       })
       .where(eq(sessions.id, sessionId));
@@ -123,28 +131,29 @@ export class DatabaseSessionManager {
   /**
    * Get API key for a session (if stored and valid)
    */
-  async getSessionApiKey(sessionId: string, providedApiKey?: string): Promise<string | null> {
+  async getSessionApiKey(sessionId: string): Promise<string | null> {
     const result = await db
       .select({
-        apiKeyHash: sessions.apiKeyHash,
+        encryptedApiKey: sessions.encryptedApiKey,
+        clientId: sessions.clientId,
       })
       .from(sessions)
       .where(and(eq(sessions.id, sessionId), eq(sessions.isActive, true)))
       .limit(1);
 
-    if (result.length === 0 || !result[0].apiKeyHash) {
+    if (result.length === 0 || !result[0].encryptedApiKey) {
       return null;
     }
 
-    // If no API key provided to verify, we can't return the actual key
-    // This is by design for security - we only store hashed versions
-    if (!providedApiKey) {
+    try {
+      // Use clientId or sessionId as decryption key
+      const decryptionKey = result[0].clientId || sessionId;
+      const apiKey = decryptApiKey(result[0].encryptedApiKey, decryptionKey);
+      return apiKey;
+    } catch (error) {
+      console.error(`Failed to decrypt API key for session ${sessionId}:`, error);
       return null;
     }
-
-    const isValid = await verifyApiKey(providedApiKey, result[0].apiKeyHash);
-
-    return isValid ? providedApiKey : null;
   }
 
   /**
@@ -165,7 +174,7 @@ export class DatabaseSessionManager {
       .update(sessions)
       .set({ 
         isActive: false,
-        apiKeyHash: null,
+        encryptedApiKey: null,
       })
       .where(eq(sessions.id, sessionId));
 
