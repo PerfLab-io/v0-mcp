@@ -22,10 +22,13 @@ import {
   findChatsSchema,
   favoriteChat,
   favoriteChatSchema,
+  listFiles,
+  listFilesSchema,
 } from "../v0/index.js";
 import { sessionApiKeyStore } from "../v0/client.js";
 import { oauthProvider, oauthRouter } from "./oauth-provider.js";
 import { v0Prompts, getPromptContent } from "../prompts/index.js";
+import { sessionFileStore } from "../resources/sessionFileStore.js";
 interface Session {
   id: string;
   server: McpServer;
@@ -40,6 +43,37 @@ interface Session {
 }
 
 const sessions = new Map<string, Session>();
+
+// Helper function to get MIME type from language
+function getMimeType(language: string): string {
+  const mimeTypes: Record<string, string> = {
+    javascript: "text/javascript",
+    typescript: "text/typescript",
+    jsx: "text/jsx",
+    tsx: "text/tsx",
+    html: "text/html",
+    css: "text/css",
+    json: "application/json",
+    python: "text/x-python",
+    java: "text/x-java-source",
+    cpp: "text/x-c++src",
+    c: "text/x-csrc",
+    rust: "text/x-rust",
+    go: "text/x-go",
+    php: "text/x-php",
+    ruby: "text/x-ruby",
+    shell: "text/x-shellscript",
+    bash: "text/x-shellscript",
+    sql: "text/x-sql",
+    xml: "text/xml",
+    yaml: "text/yaml",
+    yml: "text/yaml",
+    markdown: "text/markdown",
+    md: "text/markdown",
+  };
+
+  return mimeTypes[language.toLowerCase()] || "text/plain";
+}
 
 function createMcpServer(): McpServer {
   const server = new McpServer({
@@ -124,6 +158,19 @@ function createMcpServer(): McpServer {
       return response.result;
     }
   );
+
+  server.registerTool(
+    "list_files",
+    {
+      title: "List Session Files",
+      description:
+        "List all files generated in the current session from V0 chats and messages",
+      inputSchema: listFilesSchema.shape,
+    },
+    async (args) => {
+      const response = await listFiles(args);
+      return response.result;
+    }
   );
 
   server.registerResource(
@@ -595,7 +642,8 @@ app.post("/mcp", async (c) => {
               },
               {
                 name: "favorite_chat",
-                description: "Mark a v0 chat as favorite or remove from favorites",
+                description:
+                  "Mark a v0 chat as favorite or remove from favorites",
                 inputSchema: {
                   type: "object",
                   properties: {
@@ -605,10 +653,33 @@ app.post("/mcp", async (c) => {
                     },
                     isFavorite: {
                       type: "boolean",
-                      description: "Whether to favorite (true) or unfavorite (false) the chat",
+                      description:
+                        "Whether to favorite (true) or unfavorite (false) the chat",
                     },
                   },
                   required: ["chatId", "isFavorite"],
+                },
+              },
+              {
+                name: "list_files",
+                description:
+                  "List all files generated in the current session from V0 chats and messages",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    chatId: {
+                      type: "string",
+                      description: "Filter files by specific chat ID",
+                    },
+                    language: {
+                      type: "string",
+                      description: "Filter files by programming language",
+                    },
+                    includeStats: {
+                      type: "boolean",
+                      description: "Include file statistics in response",
+                    },
+                  },
                 },
               },
             ],
@@ -751,6 +822,78 @@ app.post("/mcp", async (c) => {
             },
           };
         }
+        break;
+      }
+
+      case "resources/list": {
+        const sessionFiles = sessionFileStore.getSessionFiles(session.id);
+
+        const resources = sessionFiles.map((file) => {
+          const fileName =
+            file.file.meta?.filename ||
+            `${file.file.lang}_file_${file.id.slice(-8)}`;
+          return {
+            uri: file.uri,
+            name: fileName,
+            description: `${file.file.lang} file from chat ${file.chatId}${
+              file.messageId ? ` (message ${file.messageId})` : ""
+            }`,
+            mimeType: getMimeType(file.file.lang),
+          };
+        });
+
+        response = {
+          jsonrpc: "2.0" as const,
+          id: requestData.id,
+          result: {
+            resources,
+          },
+        };
+        break;
+      }
+
+      case "resources/read": {
+        const uri = requestData.params?.uri;
+
+        if (!uri) {
+          response = {
+            jsonrpc: "2.0" as const,
+            id: requestData.id,
+            error: {
+              code: -32602,
+              message: "Missing required parameter: uri",
+            },
+          };
+          break;
+        }
+
+        const file = sessionFileStore.getFileByUri(uri);
+
+        if (!file) {
+          response = {
+            jsonrpc: "2.0" as const,
+            id: requestData.id,
+            error: {
+              code: -32602,
+              message: `Resource not found: ${uri}`,
+            },
+          };
+          break;
+        }
+
+        response = {
+          jsonrpc: "2.0" as const,
+          id: requestData.id,
+          result: {
+            contents: [
+              {
+                uri: file.uri,
+                mimeType: getMimeType(file.file.lang),
+                text: file.file.source,
+              },
+            ],
+          },
+        };
         break;
       }
 
@@ -905,6 +1048,7 @@ app.delete("/mcp", (c) => {
     // Clean up session from both stores
     sessions.delete(sessionId);
     sessionApiKeyStore.clearSession(sessionId);
+    sessionFileStore.clearSession(sessionId);
     console.log(`Session ${sessionId} terminated and cleaned up`);
     return c.text("", 200);
   }

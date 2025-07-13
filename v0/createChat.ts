@@ -27,6 +27,10 @@ export async function createChat(inputs: z.infer<typeof createChatSchema>) {
   try {
     const chat = await v0Client.chats.create(inputs);
 
+    const fileInfo =
+      chat.files && chat.files.length > 0
+        ? `\n📁 Generated ${chat.files.length} file(s) - use list_files tool to view them`
+        : "";
 
     const result = {
       content: [
@@ -35,7 +39,7 @@ export async function createChat(inputs: z.infer<typeof createChatSchema>) {
           text: `Successfully created v0 chat with ID: ${chat.id}
 Message: ${inputs.message}
 ${inputs.system ? `System: ${inputs.system}` : ""}
-Chat URL: ${chat.url || "Not available"}`,
+Chat URL: ${chat.url || "Not available"}${fileInfo}`,
         },
       ],
     };

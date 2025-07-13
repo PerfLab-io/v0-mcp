@@ -15,7 +15,9 @@ export const createMessageSchema = z.object({
     .describe("Model configuration for the message"),
 });
 
-export async function createMessage(inputs: z.infer<typeof createMessageSchema>) {
+export async function createMessage(
+  inputs: z.infer<typeof createMessageSchema>
+) {
   try {
     const message = await v0Client.chats.createMessage({
       chatId: inputs.chatId,
@@ -23,6 +25,10 @@ export async function createMessage(inputs: z.infer<typeof createMessageSchema>)
       modelConfiguration: inputs.modelConfiguration,
     });
 
+    const fileInfo =
+      message.files && message.files.length > 0
+        ? `\n📁 Generated ${message.files.length} file(s) - use list_files tool to view them`
+        : "";
 
     const result = {
       content: [
@@ -33,7 +39,7 @@ Message ID: ${message.id}
 Message content: ${inputs.message}
 ${message.url ? `Message URL: ${message.url}` : ""}
 ${message.demo ? `Demo: ${message.demo}` : ""}
-Model: ${message.modelConfiguration.modelId}`,
+Model: ${message.modelConfiguration.modelId}${fileInfo}`,
         },
       ],
     };
