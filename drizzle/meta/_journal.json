@@ -15,6 +15,13 @@
       "when": 1752439232512,
       "tag": "0001_lean_jasper_sitwell",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1752440362428,
+      "tag": "0002_nice_deathbird",
+      "breakpoints": true
     }
   ]
 }

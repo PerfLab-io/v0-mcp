@@ -26,7 +26,6 @@ export const authorizationCodes = pgTable("authorization_codes", {
 
 export const accessTokens = pgTable("access_tokens", {
   id: serial("id").primaryKey(),
-  token: text("token").notNull(), // The actual V0 API key (used as access token)
   clientId: text("client_id").notNull(),
   scope: text("scope").notNull(),
   sessionId: varchar("session_id", { length: 36 }), // Link to session
