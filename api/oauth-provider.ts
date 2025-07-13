@@ -157,6 +157,10 @@ export const oauthRouter = new Hono();
 
 // Authorization endpoint - presents form for API key input (Step 10 in sequence diagram)
 oauthRouter.get("/authorize", (c) => {
+  const query = c.req.query();
+  console.log("OAuth authorize request query parameters:", query);
+  console.log("Raw URL:", c.req.url);
+  
   const {
     client_id,
     redirect_uri,
@@ -165,11 +169,25 @@ oauthRouter.get("/authorize", (c) => {
     scope,
     state,
     resource, // Required by MCP spec
-  } = c.req.query();
+  } = query;
 
-  if (!client_id || !redirect_uri || !code_challenge || !resource) {
-    return c.text("Missing required parameters (client_id, redirect_uri, code_challenge, resource)", 400);
+  console.log("Extracted parameters:", {
+    client_id,
+    redirect_uri,
+    code_challenge,
+    code_challenge_method,
+    scope,
+    state,
+    resource
+  });
+
+  if (!client_id || !redirect_uri || !code_challenge) {
+    console.log("Missing parameters - client_id:", !!client_id, "redirect_uri:", !!redirect_uri, "code_challenge:", !!code_challenge, "resource:", !!resource);
+    return c.text("Missing required parameters (client_id, redirect_uri, code_challenge)", 400);
   }
+
+  // Set default resource if not provided (MCP spec recommends it but some clients might not send it)
+  const resourceParam = resource || "http://localhost:3000/mcp";
 
   // Return HTML form for API key input
   const html = `
@@ -203,7 +221,7 @@ oauthRouter.get("/authorize", (c) => {
             <input type="hidden" name="code_challenge_method" value="${code_challenge_method || 'S256'}">
             <input type="hidden" name="scope" value="${scope || 'mcp:tools mcp:resources'}">
             <input type="hidden" name="state" value="${state || ''}">
-            <input type="hidden" name="resource" value="${resource}">
+            <input type="hidden" name="resource" value="${resourceParam}">
             
             <div class="form-group">
                 <label for="v0_api_key">V0 API Key:</label>
