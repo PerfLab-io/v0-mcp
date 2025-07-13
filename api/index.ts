@@ -480,68 +480,6 @@ app.post("/mcp", async (c) => {
         };
         break;
 
-      case "resources/read": {
-        const uri = requestData.params?.uri;
-        if (uri === "v0://user/config") {
-          response = {
-            jsonrpc: "2.0" as const,
-            id: requestData.id,
-            result: {
-              contents: [
-                {
-                  uri,
-                  mimeType: "application/json",
-                  text: JSON.stringify(
-                    {
-                      userId: "example-user",
-                      settings: {
-                        theme: "dark",
-                        language: "en",
-                      },
-                    },
-                    null,
-                    2
-                  ),
-                },
-              ],
-            },
-          };
-        } else if (uri?.startsWith("v0://projects/")) {
-          const projectId = uri.split("/").pop();
-          response = {
-            jsonrpc: "2.0" as const,
-            id: requestData.id,
-            result: {
-              contents: [
-                {
-                  uri,
-                  mimeType: "application/json",
-                  text: JSON.stringify(
-                    {
-                      projectId,
-                      name: `Project ${projectId}`,
-                      status: "active",
-                      created: new Date().toISOString(),
-                    },
-                    null,
-                    2
-                  ),
-                },
-              ],
-            },
-          };
-        } else {
-          response = {
-            jsonrpc: "2.0" as const,
-            id: requestData.id,
-            error: {
-              code: -32602,
-              message: `Unknown resource: ${uri}`,
-            },
-          };
-        }
-        break;
-      }
 
       case "tools/list":
         response = {
@@ -855,6 +793,62 @@ app.post("/mcp", async (c) => {
           break;
         }
 
+        // Handle static resources
+        if (uri === "v0://user/config") {
+          response = {
+            jsonrpc: "2.0" as const,
+            id: requestData.id,
+            result: {
+              contents: [
+                {
+                  uri,
+                  mimeType: "application/json",
+                  text: JSON.stringify(
+                    {
+                      userId: "example-user",
+                      settings: {
+                        theme: "dark",
+                        language: "en",
+                      },
+                    },
+                    null,
+                    2
+                  ),
+                },
+              ],
+            },
+          };
+          break;
+        }
+
+        if (uri?.startsWith("v0://projects/")) {
+          const projectId = uri.split("/").pop();
+          response = {
+            jsonrpc: "2.0" as const,
+            id: requestData.id,
+            result: {
+              contents: [
+                {
+                  uri,
+                  mimeType: "application/json",
+                  text: JSON.stringify(
+                    {
+                      projectId,
+                      name: `Project ${projectId}`,
+                      status: "active",
+                      created: new Date().toISOString(),
+                    },
+                    null,
+                    2
+                  ),
+                },
+              ],
+            },
+          };
+          break;
+        }
+
+        // Handle session files
         const file = sessionFileStore.getFileByUri(uri);
 
         if (!file) {
