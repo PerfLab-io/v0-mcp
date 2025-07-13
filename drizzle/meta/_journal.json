@@ -29,6 +29,13 @@
       "when": 1752440547230,
       "tag": "0003_wooden_hannibal_king",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1752442981642,
+      "tag": "0004_curious_diamondback",
+      "breakpoints": true
     }
   ]
 }

@@ -19,7 +19,7 @@ export const authorizationCodes = pgTable("authorization_codes", {
   codeChallenge: text("code_challenge").notNull(),
   codeChallengeMethod: varchar("code_challenge_method", { length: 10 }).notNull(),
   scope: text("scope").notNull(),
-  apiKey: text("api_key").notNull(), // Temporarily store the actual API key for OAuth flow
+  encryptedApiKey: text("encrypted_api_key").notNull(), // AES-256-GCM encrypted V0 API key using client_id as key
   createdAt: timestamp("created_at").defaultNow().notNull(),
   expiresAt: timestamp("expires_at").notNull(),
 });

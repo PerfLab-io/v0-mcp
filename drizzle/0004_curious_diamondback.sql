@@ -1,0 +1,1 @@
+ALTER TABLE "authorization_codes" RENAME COLUMN "api_key" TO "encrypted_api_key";

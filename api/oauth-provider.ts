@@ -2,9 +2,9 @@ import { randomUUID } from "crypto";
 import { Hono } from "hono";
 import { eq, and, gte } from "drizzle-orm";
 import { db } from "../drizzle/index.js";
-import { accessTokens } from "../drizzle/schema.js";
+import { authorizationCodes, accessTokens } from "../drizzle/schema.js";
 import { sessionApiKeyStore } from "../v0/client.js";
-import { encryptApiKey, generateAccessToken } from "../utils/crypto.js";
+import { encryptApiKey, decryptApiKey, generateAccessToken } from "../utils/crypto.js";
 
 interface AccessToken {
   token: string;
@@ -28,6 +28,9 @@ class V0OAuthProvider {
   ): Promise<string> {
     const code = randomUUID();
     
+    // Encrypt the API key using the client_id
+    const encryptedApiKey = encryptApiKey(v0ApiKey, clientId);
+    
     const authCode = {
       code,
       clientId,
@@ -35,7 +38,7 @@ class V0OAuthProvider {
       codeChallenge,
       codeChallengeMethod,
       scope,
-      apiKey: v0ApiKey, // Store temporarily for OAuth flow
+      encryptedApiKey, // Store encrypted API key
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + this.CODE_EXPIRES_IN * 1000),
     };
@@ -78,7 +81,10 @@ class V0OAuthProvider {
       return null;
     }
 
-    // Generate a secure access token and store encrypted API key in sessionApiKeyStore
+    // Decrypt the API key from the authorization code
+    const decryptedApiKey = decryptApiKey(authCode.encryptedApiKey, clientId);
+    
+    // Generate a secure access token and store API key in sessionApiKeyStore
     const token = generateAccessToken();
     const accessToken = {
       clientId,
@@ -90,9 +96,8 @@ class V0OAuthProvider {
 
     await db.insert(accessTokens).values(accessToken);
     
-    // Store encrypted API key in sessionApiKeyStore using the generated token as session ID
-    const encryptedApiKey = encryptApiKey(authCode.apiKey, clientId);
-    sessionApiKeyStore.setSessionApiKey(token, authCode.apiKey);
+    // Store decrypted API key in sessionApiKeyStore using the generated token as session ID
+    sessionApiKeyStore.setSessionApiKey(token, decryptedApiKey);
     
     await db.delete(authorizationCodes).where(eq(authorizationCodes.code, code));
     
