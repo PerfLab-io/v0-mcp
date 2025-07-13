@@ -441,64 +441,35 @@ app.post("/mcp", async (c) => {
     const requestData = await c.req.json();
     console.log("Request method:", requestData.method);
 
-    // MCP-compliant session management
+    // Extract client info from initialize requests
+    let clientInfo: { name: string; version: string } | undefined;
+    if (requestData.method === "initialize" && requestData.params?.clientInfo) {
+      clientInfo = {
+        name: requestData.params.clientInfo.name,
+        version: requestData.params.clientInfo.version,
+      };
+      console.log("Client info from initialize:", clientInfo);
+    }
+
+    // Simplified session management: always create session if no ID provided
     let session: any;
 
-    if (requestData.method === "initialize") {
-      // According to MCP spec: create session only on initialize without session header
-      if (!sessionId) {
-        // Create new session for initialization
-        session = await sessionManager.createOrGetSession();
-        console.log("Created new session for initialization:", session.id);
+    if (sessionId) {
+      // Session ID provided - try to get existing session
+      session = await sessionManager.getSession(sessionId);
+      if (session) {
+        // Update last activity for existing session
+        await sessionManager.updateLastActivity(sessionId);
+        console.log("Using existing session:", session.id);
       } else {
-        // If session ID provided on initialize, return 404 per MCP spec
-        return c.json(
-          {
-            jsonrpc: "2.0",
-            error: {
-              code: -32000,
-              message: "Session not found",
-            },
-            id: requestData.id,
-          },
-          404
-        );
+        // Session ID provided but not found - create new session with that ID
+        session = await sessionManager.createOrGetSession(sessionId, clientInfo);
+        console.log("Created new session with provided ID:", session.id);
       }
     } else {
-      // For all non-initialize requests, session ID is required
-      if (!sessionId) {
-        return c.json(
-          {
-            jsonrpc: "2.0",
-            error: {
-              code: -32000,
-              message: "Session ID required for non-initialize requests",
-            },
-            id: requestData.id,
-          },
-          400
-        );
-      }
-
-      // Get existing session
-      session = await sessionManager.getSession(sessionId);
-      if (!session) {
-        // Session not found - client must reinitialize per MCP spec
-        return c.json(
-          {
-            jsonrpc: "2.0",
-            error: {
-              code: -32000,
-              message: "Session not found - please reinitialize",
-            },
-            id: requestData.id,
-          },
-          404
-        );
-      }
-
-      // Update last activity for existing session
-      await sessionManager.updateLastActivity(sessionId);
+      // No session ID provided - create new session
+      session = await sessionManager.createOrGetSession(undefined, clientInfo);
+      console.log("Created new session (no ID provided):", session.id);
     }
 
     console.log(
@@ -524,10 +495,21 @@ app.post("/mcp", async (c) => {
       );
     }
 
-    // Get API key from sessionApiKeyStore using the access token
-    const currentApiKey = sessionApiKeyStore.getSessionApiKey(
-      accessToken.token
-    );
+    // Get API key by decrypting the access token
+    let currentApiKey: string | null = null;
+    try {
+      // The access token is the encrypted API key, decrypt it using the client_id
+      const { decryptApiKey } = await import("../utils/crypto.js");
+      currentApiKey = decryptApiKey(accessToken.token, accessToken.clientId);
+      
+      // Set current session in the API key store for backward compatibility
+      sessionApiKeyStore.setCurrentSession(session.id);
+      sessionApiKeyStore.setSessionApiKey(session.id, currentApiKey);
+      sessionApiKeyStore.setSessionApiKey(accessToken.token, currentApiKey);
+    } catch (error) {
+      console.error(`Failed to decrypt API key from token: ${error}`);
+    }
+    
     if (!currentApiKey) {
       console.log(
         `Warning: No API key available for token ${accessToken.token.substring(
@@ -535,10 +517,6 @@ app.post("/mcp", async (c) => {
           10
         )}...`
       );
-    } else {
-      // Set current session in the API key store for backward compatibility
-      sessionApiKeyStore.setCurrentSession(session.id);
-      sessionApiKeyStore.setSessionApiKey(session.id, currentApiKey);
     }
 
     // Always set the session ID header in the response
