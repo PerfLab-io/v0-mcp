@@ -31,6 +31,10 @@ class SessionApiKeyStore {
     return this.sessionKeys.get(this.currentSessionId);
   }
 
+  getCurrentSessionId(): string | undefined {
+    return this.currentSessionId || undefined;
+  }
+
   clearSession(sessionId: string): void {
     this.sessionKeys.delete(sessionId);
     if (this.currentSessionId === sessionId) {
