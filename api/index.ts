@@ -8,7 +8,6 @@ import {
   McpServer,
   ResourceTemplate,
 } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { randomUUID } from "crypto";
 import {
   createChat,
   createChatSchema,
@@ -26,10 +25,16 @@ import {
   listFilesSchema,
 } from "../v0/index.js";
 import { sessionApiKeyStore } from "../v0/client.js";
-import { oauthProvider, oauthRouter } from "./oauth-provider.js";
+import { oauthProvider, oauthRouter, AccessToken } from "./oauth-provider.js";
 import { v0Prompts, getPromptContent } from "../prompts/index.js";
 import { sessionFileStore } from "../resources/sessionFileStore.js";
 import { sessionManager } from "../services/sessionManager.js";
+
+type Env = {
+  Variables: {
+    accessToken: AccessToken;
+  };
+};
 interface Session {
   id: string;
   server: McpServer;
@@ -43,7 +48,10 @@ interface Session {
   };
 }
 
-const sseControllers = new Map<string, ReadableStreamDefaultController<Uint8Array>>();
+const sseControllers = new Map<
+  string,
+  ReadableStreamDefaultController<Uint8Array>
+>();
 
 // Helper function to get MIME type from language
 function getMimeType(language: string): string {
@@ -239,8 +247,11 @@ async function getSession(
   console.log("getSession called with:", sessionId, "clientInfo:", clientInfo);
 
   // Get or create session using database session manager
-  const sessionData = await sessionManager.createOrGetSession(sessionId, clientInfo);
-  
+  const sessionData = await sessionManager.createOrGetSession(
+    sessionId,
+    clientInfo
+  );
+
   console.log(
     "Using session:",
     sessionData.id,
@@ -262,7 +273,7 @@ async function getSession(
   return session;
 }
 
-const app = new Hono();
+const app = new Hono<Env>();
 
 app.use(
   "*",
@@ -297,9 +308,9 @@ app.get("/.well-known/oauth-authorization-server/oauth", (c) => {
   );
 });
 
+// Authorization middleware - handles OAuth token validation only
 app.use("/mcp", async (c, next) => {
   const authHeader = c.req.header("Authorization");
-  const sessionId = c.req.header("mcp-session-id");
   const protocol = c.req.header("x-forwarded-proto") || "http";
   const host = c.req.header("host") || "localhost:3000";
   const baseUrl = `${protocol}://${host}`;
@@ -337,19 +348,40 @@ app.use("/mcp", async (c, next) => {
       );
     }
 
-    // Valid token - retrieve API key from sessionApiKeyStore using the token
-    if (sessionId) {
-      const v0ApiKey = sessionApiKeyStore.getSessionApiKey(accessToken.token);
-      if (v0ApiKey) {
-        await sessionManager.setSessionApiKey(sessionId, v0ApiKey);
-        sessionApiKeyStore.setSessionApiKey(sessionId, v0ApiKey);
-        console.log(
-          `Valid OAuth token - API key stored for session: ${sessionId}`
-        );
-      }
+    // Check token expiry
+    if (accessToken.expiresAt < new Date()) {
+      const authServerUrl = `${baseUrl}/oauth`;
+      const resourceMetadataUrl = `${baseUrl}/.well-known/oauth-protected-resource`;
+
+      c.header(
+        "WWW-Authenticate",
+        `Bearer realm="${baseUrl}", authorization_uri="${authServerUrl}/authorize", resource_metadata_url="${resourceMetadataUrl}"`
+      );
+      return c.json(
+        {
+          jsonrpc: "2.0",
+          error: {
+            code: -32000,
+            message: "Access token expired",
+            data: {
+              type: "auth_error",
+              authorization_uri: `${authServerUrl}/authorize`,
+              resource_metadata_url: resourceMetadataUrl,
+            },
+          },
+          id: null,
+        },
+        401
+      );
     }
+
+    // Store valid token for use in request handlers
+    c.set("accessToken", accessToken);
+    console.log(
+      `Valid OAuth token - expires: ${accessToken.expiresAt.toISOString()}`
+    );
   } else {
-    // No authorization header - ALWAYS require OAuth per MCP spec (Step 2 in sequence diagram)
+    // No authorization header - ALWAYS require OAuth per MCP spec
     const authServerUrl = `${baseUrl}/oauth`;
     const resourceMetadataUrl = `${baseUrl}/.well-known/oauth-protected-resource`;
 
@@ -409,13 +441,66 @@ app.post("/mcp", async (c) => {
     const requestData = await c.req.json();
     console.log("Request method:", requestData.method);
 
-    // Extract client info from initialize request
-    let clientInfo: { name: string; version: string } | undefined;
-    if (requestData.method === "initialize" && requestData.params?.clientInfo) {
-      clientInfo = requestData.params.clientInfo;
+    // MCP-compliant session management
+    let session: any;
+
+    if (requestData.method === "initialize") {
+      // According to MCP spec: create session only on initialize without session header
+      if (!sessionId) {
+        // Create new session for initialization
+        session = await sessionManager.createOrGetSession();
+        console.log("Created new session for initialization:", session.id);
+      } else {
+        // If session ID provided on initialize, return 404 per MCP spec
+        return c.json(
+          {
+            jsonrpc: "2.0",
+            error: {
+              code: -32000,
+              message: "Session not found",
+            },
+            id: requestData.id,
+          },
+          404
+        );
+      }
+    } else {
+      // For all non-initialize requests, session ID is required
+      if (!sessionId) {
+        return c.json(
+          {
+            jsonrpc: "2.0",
+            error: {
+              code: -32000,
+              message: "Session ID required for non-initialize requests",
+            },
+            id: requestData.id,
+          },
+          400
+        );
+      }
+
+      // Get existing session
+      session = await sessionManager.getSession(sessionId);
+      if (!session) {
+        // Session not found - client must reinitialize per MCP spec
+        return c.json(
+          {
+            jsonrpc: "2.0",
+            error: {
+              code: -32000,
+              message: "Session not found - please reinitialize",
+            },
+            id: requestData.id,
+          },
+          404
+        );
+      }
+
+      // Update last activity for existing session
+      await sessionManager.updateLastActivity(sessionId);
     }
 
-    const session = await getSession(sessionId, clientInfo);
     console.log(
       "Using session:",
       session.id,
@@ -423,13 +508,37 @@ app.post("/mcp", async (c) => {
       session.clientType
     );
 
-    // Set current session in the API key store
-    sessionApiKeyStore.setCurrentSession(session.id);
+    // Get the validated access token from authorization middleware
+    const accessToken = c.get("accessToken");
+    if (!accessToken) {
+      return c.json(
+        {
+          jsonrpc: "2.0",
+          error: {
+            code: -32000,
+            message: "No valid access token found",
+          },
+          id: requestData.id,
+        },
+        401
+      );
+    }
 
-    // Ensure we have an API key available for this session
-    const currentApiKey = sessionApiKeyStore.getCurrentSessionApiKey();
+    // Get API key from sessionApiKeyStore using the access token
+    const currentApiKey = sessionApiKeyStore.getSessionApiKey(
+      accessToken.token
+    );
     if (!currentApiKey) {
-      console.log(`Warning: No API key available for session ${session.id}`);
+      console.log(
+        `Warning: No API key available for token ${accessToken.token.substring(
+          0,
+          10
+        )}...`
+      );
+    } else {
+      // Set current session in the API key store for backward compatibility
+      sessionApiKeyStore.setCurrentSession(session.id);
+      sessionApiKeyStore.setSessionApiKey(session.id, currentApiKey);
     }
 
     // Always set the session ID header in the response
@@ -492,7 +601,6 @@ app.post("/mcp", async (c) => {
           },
         };
         break;
-
 
       case "tools/list":
         response = {

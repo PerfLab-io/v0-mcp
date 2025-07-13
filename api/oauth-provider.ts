@@ -15,18 +15,22 @@ import {
 } from "../utils/crypto.js";
 import { sessionManager } from "../services/sessionManager.js";
 
-interface AccessToken {
+// OAuth token expiration constants
+const TOKEN_EXPIRES_IN = 432000; // 5 days (5 * 24 * 60 * 60)
+const REFRESH_TOKEN_EXPIRES_IN = 2592000; // 30 days
+const CODE_EXPIRES_IN = 600; // 10 minutes
+
+export interface AccessToken {
   token: string;
   clientId: string;
   scope: string;
   createdAt: Date;
   expiresAt: Date;
   sessionId?: string;
+  refreshToken?: string;
 }
 
 class V0OAuthProvider {
-  private readonly TOKEN_EXPIRES_IN = 3600; // 1 hour
-  private readonly CODE_EXPIRES_IN = 600; // 10 minutes
 
   async generateAuthorizationCode(
     clientId: string,
@@ -50,7 +54,7 @@ class V0OAuthProvider {
       scope,
       encryptedApiKey, // Store encrypted API key
       createdAt: new Date(),
-      expiresAt: new Date(Date.now() + this.CODE_EXPIRES_IN * 1000),
+      expiresAt: new Date(Date.now() + CODE_EXPIRES_IN * 1000),
     };
 
     await db.insert(authorizationCodes).values(authCode);
@@ -105,19 +109,26 @@ class V0OAuthProvider {
     // Decrypt the API key from the authorization code
     const decryptedApiKey = decryptApiKey(authCode.encryptedApiKey, clientId);
 
-    // Generate a secure access token and link it to the session if provided
-    const token = generateAccessToken();
+    // Use the encrypted API key as the access token
+    const token = authCode.encryptedApiKey; // The access token IS the encrypted API key
+    const refreshToken = generateAccessToken(); // Generate a separate refresh token
+    
     const accessToken = {
+      token, // Store the encrypted API key as the token
       clientId,
       scope: authCode.scope,
       sessionId: sessionId || null, // Link to session if provided
+      refreshToken,
       createdAt: new Date(),
-      expiresAt: new Date(Date.now() + this.TOKEN_EXPIRES_IN * 1000),
+      expiresAt: new Date(Date.now() + TOKEN_EXPIRES_IN * 1000),
+      refreshExpiresAt: new Date(
+        Date.now() + REFRESH_TOKEN_EXPIRES_IN * 1000
+      ),
     };
 
     await db.insert(accessTokens).values(accessToken);
 
-    // Store decrypted API key in sessionApiKeyStore using the generated token as session ID
+    // Store decrypted API key in sessionApiKeyStore for backward compatibility
     sessionApiKeyStore.setSessionApiKey(token, decryptedApiKey);
 
     // If we have a sessionId, also update the session with the client_id and store the API key
@@ -141,22 +152,37 @@ class V0OAuthProvider {
       createdAt: accessToken.createdAt,
       expiresAt: accessToken.expiresAt,
       sessionId: sessionId,
+      refreshToken: refreshToken,
     };
   }
 
   async validateToken(token: string): Promise<AccessToken | null> {
-    // Check if we have the API key in sessionApiKeyStore
-    const apiKey = sessionApiKeyStore.getSessionApiKey(token);
-    if (!apiKey) return null;
+    // Look up the token in the database
+    const result = await db
+      .select()
+      .from(accessTokens)
+      .where(eq(accessTokens.token, token))
+      .limit(1);
 
-    // For simplicity, we'll consider tokens valid for the TOKEN_EXPIRES_IN duration
-    // In production, you might want to check against the database for revoked tokens
+    if (result.length === 0) {
+      return null;
+    }
+
+    const dbToken = result[0];
+
+    // Check if token is expired
+    if (dbToken.expiresAt < new Date()) {
+      return null;
+    }
+
     return {
-      token,
-      clientId: "unknown", // We don't store clientId with the token anymore
-      scope: "mcp:tools mcp:resources",
-      createdAt: new Date(),
-      expiresAt: new Date(Date.now() + this.TOKEN_EXPIRES_IN * 1000),
+      token: dbToken.token,
+      clientId: dbToken.clientId,
+      scope: dbToken.scope,
+      createdAt: dbToken.createdAt,
+      expiresAt: dbToken.expiresAt,
+      sessionId: dbToken.sessionId || undefined,
+      refreshToken: dbToken.refreshToken || undefined,
     };
   }
 
@@ -397,7 +423,8 @@ oauthRouter.post("/token", async (c) => {
   return c.json({
     access_token: accessToken.token,
     token_type: "Bearer",
-    expires_in: 3600,
+    expires_in: TOKEN_EXPIRES_IN,
+    refresh_token: accessToken.refreshToken,
     scope: accessToken.scope,
   });
 });
@@ -486,26 +513,25 @@ oauthRouter.post("/revoke", async (c) => {
   try {
     const formData = await c.req.formData();
     const token = formData.get("token") as string;
-    const tokenTypeHint = formData.get("token_type_hint") as string;
 
     if (!token) {
-      return c.json({ error: "invalid_request", error_description: "Token is required" }, 400);
+      return c.json(
+        { error: "invalid_request", error_description: "Token is required" },
+        400
+      );
     }
 
-    // Find any sessions linked to this token
-    // We need to check if there are any access_tokens records that have this token as sessionId
-    // or if we can find sessions that are using this token
-    
-    // First, remove token from sessionApiKeyStore (this is where the actual token->apiKey mapping is stored)
-    sessionApiKeyStore.clearSession(token);
-    
-    // Try to find access tokens that might be linked to this token
-    // Since we store sessionId in access_tokens, we need to find if this token matches any sessionId
+    // Remove the access token from the database
+    const deletedTokens = await db
+      .delete(accessTokens)
+      .where(eq(accessTokens.token, token));
+
+    // Find any sessions linked to this token and clean them up
     const linkedAccessTokens = await db
       .select({ sessionId: accessTokens.sessionId })
       .from(accessTokens)
       .where(eq(accessTokens.sessionId, token));
-    
+
     // Clean up any sessions that are linked to this token
     for (const accessTokenRecord of linkedAccessTokens) {
       if (accessTokenRecord.sessionId) {
@@ -513,19 +539,12 @@ oauthRouter.post("/revoke", async (c) => {
         console.log(`Session cleared: ${accessTokenRecord.sessionId}`);
       }
     }
-    
-    // Also check if the token itself is used as a sessionId in our session store
-    // This handles the case where the token is directly used as a session identifier
-    const sessionExists = await sessionManager.getSession(token);
-    if (sessionExists) {
-      await sessionManager.clearSession(token);
-      console.log(`Direct session cleared: ${token.substring(0, 10)}...`);
-    }
-    
-    console.log(`Token removed from sessionApiKeyStore: ${token.substring(0, 10)}...`);
 
-    console.log(`Token revoked: ${token.substring(0, 10)}...`);
-    
+    // Remove token from sessionApiKeyStore for backward compatibility
+    sessionApiKeyStore.clearSession(token);
+
+    console.log(`Access token revoked and removed: ${token.substring(0, 10)}...`);
+
     // RFC 7009 specifies that revocation endpoint should return 200 even for invalid tokens
     return c.text("", 200);
   } catch (error) {

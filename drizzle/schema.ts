@@ -26,9 +26,12 @@ export const authorizationCodes = pgTable("authorization_codes", {
 
 export const accessTokens = pgTable("access_tokens", {
   id: serial("id").primaryKey(),
+  token: text("token").notNull().unique(), // The access token (encrypted API key)
   clientId: text("client_id").notNull(),
   scope: text("scope").notNull(),
   sessionId: varchar("session_id", { length: 36 }), // Link to session
+  refreshToken: text("refresh_token"), // Refresh token for token renewal
   createdAt: timestamp("created_at").defaultNow().notNull(),
   expiresAt: timestamp("expires_at").notNull(),
+  refreshExpiresAt: timestamp("refresh_expires_at"),
 });
