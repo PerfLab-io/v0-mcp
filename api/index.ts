@@ -287,6 +287,16 @@ app.get("/.well-known/oauth-authorization-server", (c) => {
   );
 });
 
+// OAuth Authorization Server Metadata with issuer path (RFC 8414)
+app.get("/.well-known/oauth-authorization-server/oauth", (c) => {
+  const protocol = c.req.header("x-forwarded-proto") || "http";
+  const host = c.req.header("host") || "localhost:3000";
+  const baseUrl = `${protocol}://${host}`;
+  return c.json(
+    oauthProvider.getAuthorizationServerMetadata(`${baseUrl}/oauth`)
+  );
+});
+
 app.use("/mcp", async (c, next) => {
   const authHeader = c.req.header("Authorization");
   const sessionId = c.req.header("mcp-session-id");

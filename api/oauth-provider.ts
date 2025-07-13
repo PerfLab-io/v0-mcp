@@ -1,10 +1,19 @@
 import { randomUUID } from "crypto";
 import { Hono } from "hono";
-import { eq, and, gte } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "../drizzle/index.js";
-import { authorizationCodes, accessTokens } from "../drizzle/schema.js";
+import {
+  authorizationCodes,
+  accessTokens,
+  sessions,
+} from "../drizzle/schema.js";
 import { sessionApiKeyStore } from "../v0/client.js";
-import { encryptApiKey, decryptApiKey, generateAccessToken } from "../utils/crypto.js";
+import {
+  encryptApiKey,
+  decryptApiKey,
+  generateAccessToken,
+} from "../utils/crypto.js";
+import { sessionManager } from "../services/sessionManager.js";
 
 interface AccessToken {
   token: string;
@@ -12,6 +21,7 @@ interface AccessToken {
   scope: string;
   createdAt: Date;
   expiresAt: Date;
+  sessionId?: string;
 }
 
 class V0OAuthProvider {
@@ -27,10 +37,10 @@ class V0OAuthProvider {
     v0ApiKey: string
   ): Promise<string> {
     const code = randomUUID();
-    
+
     // Encrypt the API key using the client_id
     const encryptedApiKey = encryptApiKey(v0ApiKey, clientId);
-    
+
     const authCode = {
       code,
       clientId,
@@ -51,7 +61,8 @@ class V0OAuthProvider {
     code: string,
     clientId: string,
     redirectUri: string,
-    codeVerifier: string
+    codeVerifier: string,
+    sessionId?: string
   ): Promise<AccessToken | null> {
     // Get authorization code from database
     const result = await db
@@ -71,42 +82,65 @@ class V0OAuthProvider {
       authCode.expiresAt < new Date()
     ) {
       // Delete expired/invalid code
-      await db.delete(authorizationCodes).where(eq(authorizationCodes.code, code));
+      await db
+        .delete(authorizationCodes)
+        .where(eq(authorizationCodes.code, code));
       return null;
     }
 
     // Validate PKCE
-    if (!this.validatePKCE(codeVerifier, authCode.codeChallenge, authCode.codeChallengeMethod)) {
-      await db.delete(authorizationCodes).where(eq(authorizationCodes.code, code));
+    if (
+      !this.validatePKCE(
+        codeVerifier,
+        authCode.codeChallenge,
+        authCode.codeChallengeMethod
+      )
+    ) {
+      await db
+        .delete(authorizationCodes)
+        .where(eq(authorizationCodes.code, code));
       return null;
     }
 
     // Decrypt the API key from the authorization code
     const decryptedApiKey = decryptApiKey(authCode.encryptedApiKey, clientId);
-    
-    // Generate a secure access token and store API key in sessionApiKeyStore
+
+    // Generate a secure access token and link it to the session if provided
     const token = generateAccessToken();
     const accessToken = {
       clientId,
       scope: authCode.scope,
-      sessionId: null, // Will be set when used
+      sessionId: sessionId || null, // Link to session if provided
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + this.TOKEN_EXPIRES_IN * 1000),
     };
 
     await db.insert(accessTokens).values(accessToken);
-    
+
     // Store decrypted API key in sessionApiKeyStore using the generated token as session ID
     sessionApiKeyStore.setSessionApiKey(token, decryptedApiKey);
-    
-    await db.delete(authorizationCodes).where(eq(authorizationCodes.code, code));
-    
+
+    // If we have a sessionId, also update the session with the client_id and store the API key
+    if (sessionId) {
+      await sessionManager.setSessionApiKey(sessionId, decryptedApiKey);
+      // Update session to link client_id
+      await db
+        .update(sessions)
+        .set({ clientId })
+        .where(eq(sessions.id, sessionId));
+    }
+
+    await db
+      .delete(authorizationCodes)
+      .where(eq(authorizationCodes.code, code));
+
     return {
       token,
       clientId,
       scope: authCode.scope,
       createdAt: accessToken.createdAt,
       expiresAt: accessToken.expiresAt,
+      sessionId: sessionId,
     };
   }
 
@@ -126,13 +160,20 @@ class V0OAuthProvider {
     };
   }
 
-  private validatePKCE(verifier: string, challenge: string, method: string): boolean {
+  private validatePKCE(
+    verifier: string,
+    challenge: string,
+    method: string
+  ): boolean {
     if (method === "plain") {
       return verifier === challenge;
     }
     if (method === "S256") {
       const crypto = require("crypto");
-      const hash = crypto.createHash("sha256").update(verifier).digest("base64url");
+      const hash = crypto
+        .createHash("sha256")
+        .update(verifier)
+        .digest("base64url");
       return hash === challenge;
     }
     return false;
@@ -155,7 +196,7 @@ class V0OAuthProvider {
       revocation_endpoint: `${baseUrl}/revoke`,
       revocation_endpoint_auth_methods_supported: ["none"],
       introspection_endpoint_auth_methods_supported: ["none"],
-      registration_endpoint: `${baseUrl}/register`
+      registration_endpoint: `${baseUrl}/register`,
     };
   }
 
@@ -165,9 +206,10 @@ class V0OAuthProvider {
       authorization_servers: [authServerUrl],
       scopes_supported: ["mcp:tools", "mcp:resources"],
       bearer_methods_supported: ["header"],
-      resource_documentation: "https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization",
+      resource_documentation:
+        "https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization",
       resource_policy_uri: `${baseUrl}/privacy-policy`,
-      resource_tos_uri: `${baseUrl}/terms-of-service`
+      resource_tos_uri: `${baseUrl}/terms-of-service`,
     };
   }
 }
@@ -182,7 +224,7 @@ oauthRouter.get("/authorize", (c) => {
   const query = c.req.query();
   console.log("OAuth authorize request query parameters:", query);
   console.log("Raw URL:", c.req.url);
-  
+
   const {
     client_id,
     redirect_uri,
@@ -200,12 +242,24 @@ oauthRouter.get("/authorize", (c) => {
     code_challenge_method,
     scope,
     state,
-    resource
+    resource,
   });
 
   if (!client_id || !redirect_uri || !code_challenge) {
-    console.log("Missing parameters - client_id:", !!client_id, "redirect_uri:", !!redirect_uri, "code_challenge:", !!code_challenge, "resource:", !!resource);
-    return c.text("Missing required parameters (client_id, redirect_uri, code_challenge)", 400);
+    console.log(
+      "Missing parameters - client_id:",
+      !!client_id,
+      "redirect_uri:",
+      !!redirect_uri,
+      "code_challenge:",
+      !!code_challenge,
+      "resource:",
+      !!resource
+    );
+    return c.text(
+      "Missing required parameters (client_id, redirect_uri, code_challenge)",
+      400
+    );
   }
 
   // Set default resource if not provided (MCP spec recommends it but some clients might not send it)
@@ -231,7 +285,9 @@ oauthRouter.get("/authorize", (c) => {
         <h1>V0 MCP Server Authorization</h1>
         <div class="info">
             <p><strong>Application:</strong> ${client_id}</p>
-            <p><strong>Requested Scopes:</strong> ${scope || 'mcp:tools mcp:resources'}</p>
+            <p><strong>Requested Scopes:</strong> ${
+              scope || "mcp:tools mcp:resources"
+            }</p>
             <p>This application is requesting access to your V0 account. Please provide your V0 API key to authorize access.</p>
             <p>You can obtain your API key from: <a href="https://v0.dev/chat/settings/keys" target="_blank">https://v0.dev/chat/settings/keys</a></p>
         </div>
@@ -240,9 +296,13 @@ oauthRouter.get("/authorize", (c) => {
             <input type="hidden" name="client_id" value="${client_id}">
             <input type="hidden" name="redirect_uri" value="${redirect_uri}">
             <input type="hidden" name="code_challenge" value="${code_challenge}">
-            <input type="hidden" name="code_challenge_method" value="${code_challenge_method || 'S256'}">
-            <input type="hidden" name="scope" value="${scope || 'mcp:tools mcp:resources'}">
-            <input type="hidden" name="state" value="${state || ''}">
+            <input type="hidden" name="code_challenge_method" value="${
+              code_challenge_method || "S256"
+            }">
+            <input type="hidden" name="scope" value="${
+              scope || "mcp:tools mcp:resources"
+            }">
+            <input type="hidden" name="state" value="${state || ""}">
             <input type="hidden" name="resource" value="${resourceParam}">
             
             <div class="form-group">
@@ -251,7 +311,9 @@ oauthRouter.get("/authorize", (c) => {
             </div>
             
             <button type="submit">Authorize Access</button>
-            <a href="${redirect_uri}?error=access_denied&state=${state || ''}" style="margin-left: 15px;">Cancel</a>
+            <a href="${redirect_uri}?error=access_denied&state=${
+    state || ""
+  }" style="margin-left: 15px;">Cancel</a>
         </form>
     </body>
     </html>
@@ -266,9 +328,10 @@ oauthRouter.post("/authorize", async (c) => {
   const clientId = formData.get("client_id") as string;
   const redirectUri = formData.get("redirect_uri") as string;
   const codeChallenge = formData.get("code_challenge") as string;
-  const codeChallengeMethod = formData.get("code_challenge_method") as string || "S256";
-  const scope = formData.get("scope") as string || "mcp:tools mcp:resources";
-  const state = formData.get("state") as string || "";
+  const codeChallengeMethod =
+    (formData.get("code_challenge_method") as string) || "S256";
+  const scope = (formData.get("scope") as string) || "mcp:tools mcp:resources";
+  const state = (formData.get("state") as string) || "";
   const resource = formData.get("resource") as string; // Required by MCP spec
   const v0ApiKey = formData.get("v0_api_key") as string;
 
@@ -312,6 +375,9 @@ oauthRouter.post("/token", async (c) => {
   const redirectUri = formData.get("redirect_uri") as string;
   const codeVerifier = formData.get("code_verifier") as string;
 
+  // Get session ID from header if provided
+  const sessionId = c.req.header("mcp-session-id");
+
   if (grantType !== "authorization_code") {
     return c.json({ error: "unsupported_grant_type" }, 400);
   }
@@ -320,7 +386,8 @@ oauthRouter.post("/token", async (c) => {
     code,
     clientId,
     redirectUri,
-    codeVerifier
+    codeVerifier,
+    sessionId
   );
 
   if (!accessToken) {
@@ -362,25 +429,28 @@ oauthRouter.post("/introspect", async (c) => {
 oauthRouter.post("/register", async (c) => {
   try {
     const registration = await c.req.json();
-    
+
     // Generate client credentials
     const clientId = `mcp-client-${randomUUID()}`;
     const clientSecret = randomUUID(); // Optional for public clients
-    
+
     // Validate redirect URIs
     const redirectUris = registration.redirect_uris || [];
     if (!Array.isArray(redirectUris) || redirectUris.length === 0) {
-      return c.json({
-        error: "invalid_redirect_uri",
-        error_description: "At least one redirect_uri is required"
-      }, 400);
+      return c.json(
+        {
+          error: "invalid_redirect_uri",
+          error_description: "At least one redirect_uri is required",
+        },
+        400
+      );
     }
 
     // Create client registration response
     const protocol = c.req.header("x-forwarded-proto") || "http";
     const host = c.req.header("host") || "localhost:3000";
     const baseUrl = `${protocol}://${host}/oauth`;
-    
+
     const response = {
       client_id: clientId,
       client_secret: clientSecret,
@@ -394,18 +464,73 @@ oauthRouter.post("/register", async (c) => {
       token_endpoint_auth_method: "none", // Public client
       scope: "mcp:tools mcp:resources",
       registration_client_uri: `${baseUrl}/clients/${clientId}`,
-      registration_access_token: randomUUID()
+      registration_access_token: randomUUID(),
     };
 
     console.log(`Registered new client: ${clientId}`);
     return c.json(response, 201);
-    
   } catch (error) {
     console.error("Client registration error:", error);
-    return c.json({
-      error: "invalid_request",
-      error_description: "Invalid client registration request"
-    }, 400);
+    return c.json(
+      {
+        error: "invalid_request",
+        error_description: "Invalid client registration request",
+      },
+      400
+    );
+  }
+});
+
+// Token revocation endpoint (RFC 7009)
+oauthRouter.post("/revoke", async (c) => {
+  try {
+    const formData = await c.req.formData();
+    const token = formData.get("token") as string;
+    const tokenTypeHint = formData.get("token_type_hint") as string;
+
+    if (!token) {
+      return c.json({ error: "invalid_request", error_description: "Token is required" }, 400);
+    }
+
+    // Find any sessions linked to this token
+    // We need to check if there are any access_tokens records that have this token as sessionId
+    // or if we can find sessions that are using this token
+    
+    // First, remove token from sessionApiKeyStore (this is where the actual token->apiKey mapping is stored)
+    sessionApiKeyStore.clearSession(token);
+    
+    // Try to find access tokens that might be linked to this token
+    // Since we store sessionId in access_tokens, we need to find if this token matches any sessionId
+    const linkedAccessTokens = await db
+      .select({ sessionId: accessTokens.sessionId })
+      .from(accessTokens)
+      .where(eq(accessTokens.sessionId, token));
+    
+    // Clean up any sessions that are linked to this token
+    for (const accessTokenRecord of linkedAccessTokens) {
+      if (accessTokenRecord.sessionId) {
+        await sessionManager.clearSession(accessTokenRecord.sessionId);
+        console.log(`Session cleared: ${accessTokenRecord.sessionId}`);
+      }
+    }
+    
+    // Also check if the token itself is used as a sessionId in our session store
+    // This handles the case where the token is directly used as a session identifier
+    const sessionExists = await sessionManager.getSession(token);
+    if (sessionExists) {
+      await sessionManager.clearSession(token);
+      console.log(`Direct session cleared: ${token.substring(0, 10)}...`);
+    }
+    
+    console.log(`Token removed from sessionApiKeyStore: ${token.substring(0, 10)}...`);
+
+    console.log(`Token revoked: ${token.substring(0, 10)}...`);
+    
+    // RFC 7009 specifies that revocation endpoint should return 200 even for invalid tokens
+    return c.text("", 200);
+  } catch (error) {
+    console.error("Token revocation error:", error);
+    return c.json({ error: "server_error" }, 500);
   }
 });
 
