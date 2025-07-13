@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, varchar, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, varchar, boolean, serial } from "drizzle-orm/pg-core";
 
 export const sessions = pgTable("sessions", {
   id: varchar("id", { length: 36 }).primaryKey(), // UUID
@@ -25,7 +25,8 @@ export const authorizationCodes = pgTable("authorization_codes", {
 });
 
 export const accessTokens = pgTable("access_tokens", {
-  token: text("token").primaryKey(), // The actual V0 API key (used as access token)
+  id: serial("id").primaryKey(),
+  token: text("token").notNull(), // The actual V0 API key (used as access token)
   clientId: text("client_id").notNull(),
   scope: text("scope").notNull(),
   sessionId: varchar("session_id", { length: 36 }), // Link to session
