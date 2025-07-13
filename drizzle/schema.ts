@@ -6,7 +6,7 @@ export const sessions = pgTable("sessions", {
   clientName: text("client_name"), // Client name from clientInfo
   clientVersion: text("client_version"), // Client version from clientInfo
   clientType: varchar("client_type", { length: 20 }).notNull().default("generic"), // "mcpserver" or "generic"
-  apiKeyHash: text("api_key_hash"), // bcrypt hash of V0 API key
+  encryptedApiKey: text("encrypted_api_key"), // AES-256-GCM encrypted V0 API key using client_id as key
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastActivity: timestamp("last_activity").defaultNow().notNull(),
   isActive: boolean("is_active").default(true).notNull(),
