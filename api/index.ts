@@ -29,6 +29,7 @@ import { sessionApiKeyStore } from "../v0/client.js";
 import { oauthProvider, oauthRouter } from "./oauth-provider.js";
 import { v0Prompts, getPromptContent } from "../prompts/index.js";
 import { sessionFileStore } from "../resources/sessionFileStore.js";
+import { sessionManager } from "../services/sessionManager.js";
 interface Session {
   id: string;
   server: McpServer;
@@ -42,7 +43,7 @@ interface Session {
   };
 }
 
-const sessions = new Map<string, Session>();
+const sseControllers = new Map<string, ReadableStreamDefaultController<Uint8Array>>();
 
 // Helper function to get MIME type from language
 function getMimeType(language: string): string {
@@ -231,48 +232,33 @@ function createMcpServer(): McpServer {
   return server;
 }
 
-function getSession(
+async function getSession(
   sessionId?: string,
   clientInfo?: { name: string; version: string }
-): Session {
+): Promise<Session> {
   console.log("getSession called with:", sessionId, "clientInfo:", clientInfo);
 
-  if (sessionId && sessions.has(sessionId)) {
-    const session = sessions.get(sessionId);
-    if (session) {
-      console.log(
-        "Found existing session:",
-        session.id,
-        "clientType:",
-        session.clientType
-      );
-      session.lastActivity = new Date();
-      return session;
-    }
-  }
+  // Get or create session using database session manager
+  const sessionData = await sessionManager.createOrGetSession(sessionId, clientInfo);
+  
+  console.log(
+    "Using session:",
+    sessionData.id,
+    "clientType:",
+    sessionData.clientType
+  );
 
-  const newSessionId = randomUUID();
-  console.log("Creating new session with ID:", newSessionId);
-
-  const clientType: "mcpserver" | "generic" =
-    clientInfo?.name === "v0-mcp" ? "mcpserver" : "generic";
-
+  // Create the in-memory MCP server instance
   const session: Session = {
-    id: newSessionId,
+    id: sessionData.id,
     server: createMcpServer(),
-    createdAt: new Date(),
-    lastActivity: new Date(),
-    clientType,
+    createdAt: sessionData.createdAt,
+    lastActivity: sessionData.lastActivity,
+    clientType: sessionData.clientType,
     clientInfo,
+    sseController: sseControllers.get(sessionData.id),
   };
 
-  sessions.set(newSessionId, session);
-  console.log(
-    "Session created and stored. Total sessions:",
-    sessions.size,
-    "Client type:",
-    clientType
-  );
   return session;
 }
 
@@ -313,7 +299,7 @@ app.use("/mcp", async (c, next) => {
     const token = authHeader.substring(7);
 
     // Validate token using OAuth provider
-    const accessToken = oauthProvider.validateToken(token);
+    const accessToken = await oauthProvider.validateToken(token);
     if (!accessToken) {
       // Invalid token - return 401 with proper WWW-Authenticate header
       const authServerUrl = `${baseUrl}/oauth`;
@@ -341,8 +327,9 @@ app.use("/mcp", async (c, next) => {
       );
     }
 
-    // Valid token - store API key for this session
+    // Valid token - store API key for this session in database
     if (sessionId) {
+      await sessionManager.setSessionApiKey(sessionId, accessToken.v0ApiKey);
       sessionApiKeyStore.setSessionApiKey(sessionId, accessToken.v0ApiKey);
       console.log(
         `Valid OAuth token - API key stored for session: ${sessionId}`
@@ -379,11 +366,12 @@ app.use("/mcp", async (c, next) => {
 });
 
 // Health check endpoint
-app.get("/ping", (c) => {
+app.get("/ping", async (c) => {
+  const sessionCount = await sessionManager.getActiveSessionCount();
   return c.json({
     message: "v0 MCP Server",
     version: "1.0.0",
-    sessions: sessions.size,
+    sessions: sessionCount,
     timestamp: new Date().toISOString(),
   });
 });
@@ -414,7 +402,7 @@ app.post("/mcp", async (c) => {
       clientInfo = requestData.params.clientInfo;
     }
 
-    const session = getSession(sessionId, clientInfo);
+    const session = await getSession(sessionId, clientInfo);
     console.log(
       "Using session:",
       session.id,
@@ -927,15 +915,17 @@ app.post("/mcp", async (c) => {
 });
 
 // Handle GET requests for SSE (Server-Sent Events)
-app.get("/mcp", (c) => {
+app.get("/mcp", async (c) => {
   console.log("GET / request received");
 
   // Get session ID from query parameter for SSE connections
   const sessionId = c.req.query("sessionId") || c.req.header("mcp-session-id");
   console.log("Looking for session ID:", sessionId);
-  console.log("Available sessions:", Array.from(sessions.keys()));
+  console.log("Looking up session in database");
 
-  if (!sessionId || !sessions.has(sessionId)) {
+  // Check if session exists in database
+  const sessionData = await sessionManager.getSession(sessionId!);
+  if (!sessionId || !sessionData) {
     console.log("Invalid session ID, returning 400");
     return c.json(
       {
@@ -966,11 +956,8 @@ app.get("/mcp", (c) => {
     start(controller) {
       console.log(`SSE connection established for session: ${sessionId}`);
 
-      // Store the controller in the session for sending notifications
-      const session = sessions.get(sessionId);
-      if (session) {
-        session.sseController = controller;
-      }
+      // Store the controller for sending notifications
+      sseControllers.set(sessionId, controller);
 
       // Send initial connection confirmation
       const connectMessage = `event: connected\ndata: ${JSON.stringify({
@@ -1002,11 +989,8 @@ app.get("/mcp", (c) => {
         console.log(`SSE connection closed for session: ${sessionId}`);
         clearInterval(pingInterval);
 
-        // Remove the controller reference from the session
-        const session = sessions.get(sessionId);
-        if (session) {
-          session.sseController = undefined;
-        }
+        // Remove the controller reference
+        sseControllers.delete(sessionId);
         try {
           controller.close();
         } catch {
@@ -1041,14 +1025,15 @@ app.get("/mcp", (c) => {
 });
 
 // Handle session termination
-app.delete("/mcp", (c) => {
+app.delete("/mcp", async (c) => {
   const sessionId = c.req.header("mcp-session-id");
 
-  if (sessionId && sessions.has(sessionId)) {
-    // Clean up session from both stores
-    sessions.delete(sessionId);
+  if (sessionId) {
+    // Clean up session from all stores
+    await sessionManager.clearSession(sessionId);
     sessionApiKeyStore.clearSession(sessionId);
     sessionFileStore.clearSession(sessionId);
+    sseControllers.delete(sessionId);
     console.log(`Session ${sessionId} terminated and cleaned up`);
     return c.text("", 200);
   }
@@ -1059,15 +1044,13 @@ app.delete("/mcp", (c) => {
 // Cleanup on shutdown
 process.on("SIGINT", () => {
   console.log("Shutting down server...");
-  for (const [sessionId, session] of sessions) {
-    if (session.sseController) {
-      try {
-        session.sseController.close();
-      } catch {
-        // Controller might already be closed
-      }
+  for (const [sessionId, controller] of sseControllers) {
+    try {
+      controller.close();
+    } catch {
+      // Controller might already be closed
     }
-    sessions.delete(sessionId);
+    sseControllers.delete(sessionId);
   }
   process.exit(0);
 });

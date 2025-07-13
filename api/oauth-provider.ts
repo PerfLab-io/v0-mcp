@@ -1,18 +1,9 @@
 import { randomUUID } from "crypto";
 import { Hono } from "hono";
+import { eq, and, gte } from "drizzle-orm";
+import { db } from "../drizzle/index.js";
+import { authorizationCodes, accessTokens } from "../drizzle/schema.js";
 import { sessionApiKeyStore } from "../v0/client.js";
-
-interface AuthorizationCode {
-  code: string;
-  clientId: string;
-  redirectUri: string;
-  codeChallenge: string;
-  codeChallengeMethod: string;
-  scope: string;
-  createdAt: Date;
-  expiresAt: Date;
-  v0ApiKey?: string; // Store the V0 API key provided during auth
-}
 
 interface AccessToken {
   token: string;
@@ -24,44 +15,51 @@ interface AccessToken {
 }
 
 class V0OAuthProvider {
-  private authCodes = new Map<string, AuthorizationCode>();
-  private accessTokens = new Map<string, AccessToken>();
   private readonly TOKEN_EXPIRES_IN = 3600; // 1 hour
   private readonly CODE_EXPIRES_IN = 600; // 10 minutes
 
-  generateAuthorizationCode(
+  async generateAuthorizationCode(
     clientId: string,
     redirectUri: string,
     codeChallenge: string,
     codeChallengeMethod: string,
     scope: string,
     v0ApiKey: string
-  ): string {
+  ): Promise<string> {
     const code = randomUUID();
-    const authCode: AuthorizationCode = {
+    
+    const authCode = {
       code,
       clientId,
       redirectUri,
       codeChallenge,
       codeChallengeMethod,
       scope,
+      apiKey: v0ApiKey, // Store temporarily for OAuth flow
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + this.CODE_EXPIRES_IN * 1000),
-      v0ApiKey,
     };
 
-    this.authCodes.set(code, authCode);
+    await db.insert(authorizationCodes).values(authCode);
     return code;
   }
 
-  exchangeCodeForToken(
+  async exchangeCodeForToken(
     code: string,
     clientId: string,
     redirectUri: string,
     codeVerifier: string
-  ): AccessToken | null {
-    const authCode = this.authCodes.get(code);
-    if (!authCode) return null;
+  ): Promise<AccessToken | null> {
+    // Get authorization code from database
+    const result = await db
+      .select()
+      .from(authorizationCodes)
+      .where(eq(authorizationCodes.code, code))
+      .limit(1);
+
+    if (result.length === 0) return null;
+
+    const authCode = result[0];
 
     // Validate authorization code
     if (
@@ -69,39 +67,62 @@ class V0OAuthProvider {
       authCode.redirectUri !== redirectUri ||
       authCode.expiresAt < new Date()
     ) {
-      this.authCodes.delete(code);
+      // Delete expired/invalid code
+      await db.delete(authorizationCodes).where(eq(authorizationCodes.code, code));
       return null;
     }
 
     // Validate PKCE
     if (!this.validatePKCE(codeVerifier, authCode.codeChallenge, authCode.codeChallengeMethod)) {
-      this.authCodes.delete(code);
+      await db.delete(authorizationCodes).where(eq(authorizationCodes.code, code));
       return null;
     }
 
-    // Create access token using the V0 API key
-    const token = authCode.v0ApiKey!; // Use the V0 API key as the access token
-    const accessToken: AccessToken = {
+    // Use the API key itself as the access token (as before)
+    const token = authCode.apiKey;
+    const accessToken = {
       token,
       clientId,
       scope: authCode.scope,
+      sessionId: null, // Will be set when used
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + this.TOKEN_EXPIRES_IN * 1000),
-      v0ApiKey: authCode.v0ApiKey!,
     };
 
-    this.accessTokens.set(token, accessToken);
-    this.authCodes.delete(code); // Remove used authorization code
-    return accessToken;
+    await db.insert(accessTokens).values(accessToken);
+    await db.delete(authorizationCodes).where(eq(authorizationCodes.code, code));
+    
+    return {
+      token,
+      clientId,
+      scope: authCode.scope,
+      createdAt: accessToken.createdAt,
+      expiresAt: accessToken.expiresAt,
+      v0ApiKey: authCode.apiKey,
+    };
   }
 
-  validateToken(token: string): AccessToken | null {
-    const accessToken = this.accessTokens.get(token);
-    if (!accessToken || accessToken.expiresAt < new Date()) {
-      if (accessToken) this.accessTokens.delete(token);
-      return null;
-    }
-    return accessToken;
+  async validateToken(token: string): Promise<AccessToken | null> {
+    const result = await db
+      .select()
+      .from(accessTokens)
+      .where(and(
+        eq(accessTokens.token, token),
+        gte(accessTokens.expiresAt, new Date())
+      ))
+      .limit(1);
+
+    if (result.length === 0) return null;
+
+    const accessToken = result[0];
+    return {
+      token: accessToken.token,
+      clientId: accessToken.clientId,
+      scope: accessToken.scope,
+      createdAt: accessToken.createdAt,
+      expiresAt: accessToken.expiresAt,
+      v0ApiKey: accessToken.token, // The token IS the API key in our case
+    };
   }
 
   private validatePKCE(verifier: string, challenge: string, method: string): boolean {
@@ -261,7 +282,7 @@ oauthRouter.post("/authorize", async (c) => {
   // TODO: Validate the V0 API key by making a test request to V0
   // For now, we'll accept any non-empty key
 
-  const code = oauthProvider.generateAuthorizationCode(
+  const code = await oauthProvider.generateAuthorizationCode(
     clientId,
     redirectUri,
     codeChallenge,
@@ -294,7 +315,7 @@ oauthRouter.post("/token", async (c) => {
     return c.json({ error: "unsupported_grant_type" }, 400);
   }
 
-  const accessToken = oauthProvider.exchangeCodeForToken(
+  const accessToken = await oauthProvider.exchangeCodeForToken(
     code,
     clientId,
     redirectUri,
@@ -322,7 +343,7 @@ oauthRouter.post("/introspect", async (c) => {
     return c.json({ active: false });
   }
 
-  const accessToken = oauthProvider.validateToken(token);
+  const accessToken = await oauthProvider.validateToken(token);
   if (!accessToken) {
     return c.json({ active: false });
   }
