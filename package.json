@@ -4,7 +4,8 @@
     "dev": "tsx watch api/index.ts",
     "build": "tsc",
     "start": "node api/index.js",
-    "deploy": "vercel"
+    "deploy": "vercel",
+    "test": "vitest"
   },
   "dependencies": {
     "@hono/node-server": "^1.15.0",
