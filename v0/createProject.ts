@@ -23,7 +23,7 @@ export async function createProject(
   try {
     const project = await v0Client.projects.create(inputs);
 
-    return {
+    const result = {
       content: [
         {
           type: "text" as const,
@@ -40,17 +40,24 @@ URL: ${
         },
       ],
     };
+
+    return {
+      result,
+      rawResponse: project,
+    };
   } catch (error) {
     return {
-      content: [
-        {
-          type: "text" as const,
-          text: `Error creating v0 project: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`,
-        },
-      ],
-      isError: true,
+      result: {
+        content: [
+          {
+            type: "text" as const,
+            text: `Error creating v0 project: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`,
+          },
+        ],
+        isError: true,
+      },
     };
   }
 }

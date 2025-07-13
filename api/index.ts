@@ -54,7 +54,10 @@ function createMcpServer(): McpServer {
       description: "Create a new v0 chat session with AI",
       inputSchema: createChatSchema.shape,
     },
-    createChat
+    async (args) => {
+      const response = await createChat(args);
+      return response.result;
+    }
   );
 
   server.registerTool(
@@ -64,7 +67,10 @@ function createMcpServer(): McpServer {
       description: "Retrieve user information from v0",
       inputSchema: getUserInfoSchema.shape,
     },
-    getUserInfo
+    async (args) => {
+      const response = await getUserInfo();
+      return response.result;
+    }
   );
 
   server.registerTool(
@@ -74,7 +80,10 @@ function createMcpServer(): McpServer {
       description: "Create a new project in v0",
       inputSchema: createProjectSchema.shape,
     },
-    createProject
+    async (args) => {
+      const response = await createProject(args);
+      return response.result;
+    }
   );
 
   server.registerTool(
@@ -84,7 +93,10 @@ function createMcpServer(): McpServer {
       description: "Add a new message to an existing v0 chat",
       inputSchema: createMessageSchema.shape,
     },
-    createMessage
+    async (args) => {
+      const response = await createMessage(args);
+      return response.result;
+    }
   );
 
   server.registerTool(
@@ -94,7 +106,10 @@ function createMcpServer(): McpServer {
       description: "Search and list v0 chats with optional filtering",
       inputSchema: findChatsSchema.shape,
     },
-    findChats
+    async (args) => {
+      const response = await findChats(args);
+      return response.result;
+    }
   );
 
   server.registerTool(
@@ -104,7 +119,11 @@ function createMcpServer(): McpServer {
       description: "Mark a v0 chat as favorite or remove from favorites",
       inputSchema: favoriteChatSchema.shape,
     },
-    favoriteChat
+    async (args) => {
+      const response = await favoriteChat(args);
+      return response.result;
+    }
+  );
   );
 
   server.registerResource(
@@ -604,21 +623,56 @@ app.post("/mcp", async (c) => {
         try {
           let result;
 
+          let toolResponse;
+
           if (toolName === "create_chat") {
-            result = await createChat(args);
+            toolResponse = await createChat(args);
+            // Store files from chat creation if any were generated
+            if (
+              toolResponse.rawResponse?.files &&
+              toolResponse.rawResponse.files.length > 0
+            ) {
+              const addedFiles = sessionFileStore.addFilesFromChat(
+                session.id,
+                toolResponse.rawResponse.id,
+                toolResponse.rawResponse.files
+              );
+              console.log(
+                `Stored ${addedFiles.length} files from chat creation in session ${session.id}`
+              );
+            }
           } else if (toolName === "get_user_info") {
-            result = await getUserInfo();
+            toolResponse = await getUserInfo();
           } else if (toolName === "create_project") {
-            result = await createProject(args);
+            toolResponse = await createProject(args);
           } else if (toolName === "create_message") {
-            result = await createMessage(args);
+            toolResponse = await createMessage(args);
+            // Store files from message creation if any were generated
+            if (
+              toolResponse.rawResponse?.files &&
+              toolResponse.rawResponse.files.length > 0
+            ) {
+              const addedFiles = sessionFileStore.addFilesFromChat(
+                session.id,
+                toolResponse.rawResponse.chatId,
+                toolResponse.rawResponse.files,
+                toolResponse.rawResponse.id
+              );
+              console.log(
+                `Stored ${addedFiles.length} files from message creation in session ${session.id}`
+              );
+            }
           } else if (toolName === "find_chats") {
-            result = await findChats(args);
+            toolResponse = await findChats(args);
           } else if (toolName === "favorite_chat") {
-            result = await favoriteChat(args);
+            toolResponse = await favoriteChat(args);
+          } else if (toolName === "list_files") {
+            toolResponse = await listFiles(args);
           } else {
             throw new Error(`Unknown tool: ${toolName}`);
           }
+
+          result = toolResponse.result;
 
           response = {
             jsonrpc: "2.0" as const,
@@ -641,12 +695,15 @@ app.post("/mcp", async (c) => {
 
       case "prompts/list": {
         const offset = parseInt(requestData.params?.cursor || "0");
-        const limit = Math.min(parseInt(requestData.params?.limit || "10"), 100);
-        
+        const limit = Math.min(
+          parseInt(requestData.params?.limit || "10"),
+          100
+        );
+
         const allPrompts = v0Prompts;
         const paginatedPrompts = allPrompts.slice(offset, offset + limit);
         const hasMore = offset + limit < allPrompts.length;
-        
+
         response = {
           jsonrpc: "2.0" as const,
           id: requestData.id,
@@ -661,7 +718,7 @@ app.post("/mcp", async (c) => {
       case "prompts/get": {
         const promptName = requestData.params?.name;
         const args = requestData.params?.arguments || {};
-        
+
         if (!promptName) {
           response = {
             jsonrpc: "2.0" as const,
@@ -673,10 +730,10 @@ app.post("/mcp", async (c) => {
           };
           break;
         }
-        
+
         try {
           const promptContent = await getPromptContent(promptName, args);
-          
+
           response = {
             jsonrpc: "2.0" as const,
             id: requestData.id,

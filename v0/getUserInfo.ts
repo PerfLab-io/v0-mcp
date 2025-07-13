@@ -19,7 +19,7 @@ export async function getUserInfo() {
       scopes: scopes || [],
     };
 
-    return {
+    const result = {
       content: [
         {
           type: "text" as const,
@@ -28,17 +28,24 @@ ${JSON.stringify(userInfo, null, 2)}`,
         },
       ],
     };
+
+    return {
+      result,
+      rawResponse: { user, plan, scopes },
+    };
   } catch (error) {
     return {
-      content: [
-        {
-          type: "text" as const,
-          text: `Error retrieving v0 user info: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`,
-        },
-      ],
-      isError: true,
+      result: {
+        content: [
+          {
+            type: "text" as const,
+            text: `Error retrieving v0 user info: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`,
+          },
+        ],
+        isError: true,
+      },
     };
   }
 }

@@ -23,7 +23,8 @@ export async function createMessage(inputs: z.infer<typeof createMessageSchema>)
       modelConfiguration: inputs.modelConfiguration,
     });
 
-    return {
+
+    const result = {
       content: [
         {
           type: "text" as const,
@@ -36,20 +37,27 @@ Model: ${message.modelConfiguration.modelId}`,
         },
       ],
     };
+
+    return {
+      result,
+      rawResponse: message,
+    };
   } catch (error) {
     const apiKeyError = handleApiKeyError(error);
-    if (apiKeyError) return apiKeyError;
-    
+    if (apiKeyError) return { result: apiKeyError };
+
     return {
-      content: [
-        {
-          type: "text" as const,
-          text: `Error creating message: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`,
-        },
-      ],
-      isError: true,
+      result: {
+        content: [
+          {
+            type: "text" as const,
+            text: `Error creating message: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`,
+          },
+        ],
+        isError: true,
+      },
     };
   }
 }

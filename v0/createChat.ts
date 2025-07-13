@@ -27,7 +27,8 @@ export async function createChat(inputs: z.infer<typeof createChatSchema>) {
   try {
     const chat = await v0Client.chats.create(inputs);
 
-    return {
+
+    const result = {
       content: [
         {
           type: "text" as const,
@@ -38,20 +39,27 @@ Chat URL: ${chat.url || "Not available"}`,
         },
       ],
     };
+
+    return {
+      result,
+      rawResponse: chat,
+    };
   } catch (error) {
     const apiKeyError = handleApiKeyError(error);
-    if (apiKeyError) return apiKeyError;
-    
+    if (apiKeyError) return { result: apiKeyError };
+
     return {
-      content: [
-        {
-          type: "text" as const,
-          text: `Error creating v0 chat: ${
-            error instanceof Error ? error.message : "Unknown error"
-          }`,
-        },
-      ],
-      isError: true,
+      result: {
+        content: [
+          {
+            type: "text" as const,
+            text: `Error creating v0 chat: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`,
+          },
+        ],
+        isError: true,
+      },
     };
   }
 }
