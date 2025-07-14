@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { v0Client } from "./client.js";
-import { handleApiKeyError } from "../api/error-handler.js";
+import { v0Client } from "./client";
+import { handleApiKeyError } from "../src/error-handler";
 
 export const favoriteChatSchema = z.object({
   chatId: z.string().describe("The ID of the chat to favorite/unfavorite"),

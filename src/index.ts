@@ -1,6 +1,4 @@
-import "dotenv/config";
 import { Hono } from "hono";
-import { handle } from "hono/vercel";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import {
@@ -11,13 +9,13 @@ import {
   findChats,
   favoriteChat,
   listFiles,
-} from "../v0/index.js";
-import { sessionApiKeyStore } from "../v0/client.js";
-import { oauthProvider, oauthRouter, AccessToken } from "./oauth-provider.js";
-import { v0Prompts, getPromptContent } from "../prompts/index.js";
-import { sessionFileStore } from "../resources/sessionFileStore.js";
-import { sessionManager } from "../services/sessionManager.js";
-import { getMimeType } from "../utils/mimeType.js";
+} from "../v0/index";
+import { sessionApiKeyStore } from "../v0/client";
+import { oauthProvider, oauthRouter, AccessToken } from "./oauth-provider";
+import { v0Prompts, getPromptContent } from "../prompts/index";
+import { sessionFileStore } from "../resources/sessionFileStore";
+import { sessionManager } from "../services/sessionManager";
+import { getMimeType } from "../utils/mimeType";
 
 type Env = {
   Variables: {
@@ -261,7 +259,7 @@ app.post("/mcp", async (c) => {
     let currentApiKey: string | null = null;
     try {
       // The access token is the encrypted API key, decrypt it using the client_id
-      const { decryptApiKey } = await import("../utils/crypto.js");
+      const { decryptApiKey } = await import("../utils/crypto");
       currentApiKey = decryptApiKey(accessToken.token, accessToken.clientId);
 
       // Set current session in the API key store for backward compatibility
@@ -896,10 +894,4 @@ app.delete("/mcp", async (c) => {
   return c.text("", 404);
 });
 
-const handler = handle(app);
-
-export const GET = handler;
-export const POST = handler;
-export const PATCH = handler;
-export const PUT = handler;
-export const OPTIONS = handler;
+export default app;

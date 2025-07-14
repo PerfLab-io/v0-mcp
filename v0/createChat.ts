@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { v0Client } from "./client.js";
-import { handleApiKeyError } from "../api/error-handler.js";
+import { v0Client } from "./client";
+import { handleApiKeyError } from "../src/error-handler";
 
 export const createChatSchema = z.object({
   message: z.string().describe("The message to send to v0"),

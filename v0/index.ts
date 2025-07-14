@@ -1,8 +1,8 @@
-export { createChat, createChatSchema } from "./createChat.js";
-export { getUserInfo, getUserInfoSchema } from "./getUserInfo.js";
-export { createProject, createProjectSchema } from "./createProject.js";
-export { createMessage, createMessageSchema } from "./createMessage.js";
-export { findChats, findChatsSchema } from "./findChats.js";
-export { favoriteChat, favoriteChatSchema } from "./favoriteChat.js";
-export { listFiles, listFilesSchema } from "./listFiles.js";
-export { v0Client } from "./client.js";
+export { createChat, createChatSchema } from "./createChat";
+export { getUserInfo, getUserInfoSchema } from "./getUserInfo";
+export { createProject, createProjectSchema } from "./createProject";
+export { createMessage, createMessageSchema } from "./createMessage";
+export { findChats, findChatsSchema } from "./findChats";
+export { favoriteChat, favoriteChatSchema } from "./favoriteChat";
+export { listFiles, listFilesSchema } from "./listFiles";
+export { v0Client } from "./client";

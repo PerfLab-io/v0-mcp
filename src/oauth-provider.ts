@@ -1,18 +1,14 @@
 import { randomUUID } from "crypto";
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
-import { db } from "../drizzle/index.js";
-import {
-  authorizationCodes,
-  accessTokens,
-  sessions,
-} from "../drizzle/schema.js";
-import { sessionApiKeyStore } from "../v0/client.js";
+import { db } from "../drizzle/index";
+import { authorizationCodes, accessTokens } from "../drizzle/schema";
+import { sessionApiKeyStore } from "../v0/client";
 import {
   encryptApiKey,
   decryptApiKey,
   generateAccessToken,
-} from "../utils/crypto.js";
+} from "../utils/crypto";
 
 // OAuth token expiration constants
 const TOKEN_EXPIRES_IN = 432000; // 5 days (5 * 24 * 60 * 60)

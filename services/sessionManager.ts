@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
-import { eq, and, gte } from "drizzle-orm";
-import { db } from "../drizzle/index.js";
-import { sessions } from "../drizzle/schema.js";
+import { eq } from "drizzle-orm";
+import { db } from "../drizzle/index";
+import { sessions } from "../drizzle/schema";
 
 export interface SessionData {
   id: string;

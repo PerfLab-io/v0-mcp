@@ -1,0 +1,7 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "v0-mcp",
+  "compatibility_date": "2025-07-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./src/index.ts"
+}

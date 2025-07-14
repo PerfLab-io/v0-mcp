@@ -2,10 +2,8 @@
   "name": "v0-mcp",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch api/index.ts",
-    "build": "tsc",
-    "start": "node api/index.js",
-    "deploy": "vercel",
+    "dev": "vite",
+    "build": "vite build",
     "test": "vitest"
   },
   "dependencies": {
@@ -24,12 +22,18 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.2.3",
+    "@hono/vite-build": "^1.6.2",
+    "@hono/vite-dev-server": "^0.20.0",
     "@types/bcrypt": "^5.0.2",
     "@types/node": "^20.11.0",
     "drizzle-kit": "^0.31.4",
     "tsx": "^4.20.3",
+    "typescript": "^5.8.2",
     "vercel": "^44.4.1",
+    "vite": "^6.3.5",
+    "vite-ssr-components": "^0.3.0",
     "vitest": "^3.2.4",
-    "typescript": "^5.8.2"
+    "wrangler": "^4.17.0"
   }
 }

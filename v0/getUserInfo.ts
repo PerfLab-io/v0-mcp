@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { v0Client } from "./client.js";
+import { v0Client } from "./client";
 
 export const getUserInfoSchema = z.object({});
 

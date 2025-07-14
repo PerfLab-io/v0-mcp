@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { v0Client } from "./client.js";
+import { v0Client } from "./client";
 
 export const createProjectSchema = z.object({
   name: z.string().describe("The project name"),
