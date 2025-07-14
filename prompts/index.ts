@@ -37,7 +37,8 @@ export const v0Prompts = [
   {
     name: "iterate_v0_chat",
     title: "Iterate on V0 Chat",
-    description: "Help with continuing and refining an existing V0 conversation",
+    description:
+      "Help with continuing and refining an existing V0 conversation",
     arguments: [
       {
         name: "chat_id",
@@ -46,7 +47,8 @@ export const v0Prompts = [
       },
       {
         name: "iteration_type",
-        description: "Type of iteration (refinement, new_feature, bug_fix, styling)",
+        description:
+          "Type of iteration (refinement, new_feature, bug_fix, styling)",
         required: false,
       },
     ],
@@ -82,12 +84,13 @@ export const v0Prompts = [
   },
   {
     name: "v0_workflow_optimization",
-    title: "V0 Workflow Optimization", 
+    title: "V0 Workflow Optimization",
     description: "Advanced tips for optimizing your V0 development workflow",
     arguments: [
       {
         name: "use_case",
-        description: "Primary use case (prototyping, production, learning, etc.)",
+        description:
+          "Primary use case (prototyping, production, learning, etc.)",
         required: false,
       },
     ],
@@ -99,7 +102,8 @@ export const v0Prompts = [
     arguments: [
       {
         name: "issue_type",
-        description: "Type of issue (api_error, chat_problem, project_issue, etc.)",
+        description:
+          "Type of issue (api_error, chat_problem, project_issue, etc.)",
         required: false,
       },
     ],
@@ -107,7 +111,10 @@ export const v0Prompts = [
 ];
 
 // Prompt content generators
-export async function getPromptContent(name: string, args: Record<string, any> = {}) {
+export async function getPromptContent(
+  name: string,
+  args: Record<string, any> = {}
+) {
   switch (name) {
     case "create_v0_chat":
       return generateCreateChatPrompt(args);
@@ -129,7 +136,7 @@ export async function getPromptContent(name: string, args: Record<string, any> =
 function generateCreateChatPrompt(args: Record<string, any>) {
   const projectType = args.project_type || "web application";
   const complexity = args.complexity || "medium";
-  
+
   return {
     role: "user" as const,
     content: {
@@ -161,7 +168,13 @@ Call the create_chat tool with these parameters:
   "system": "You are an expert ${projectType} developer. Focus on modern best practices, clean code, and excellent UX.",
   "chatPrivacy": "private",
   "modelConfiguration": {
-    "modelId": "${complexity === 'simple' ? 'v0-1.5-sm' : complexity === 'complex' ? 'v0-1.5-lg' : 'v0-1.5-md'}",
+    "modelId": "${
+      complexity === "simple"
+        ? "v0-1.5-sm"
+        : complexity === "complex"
+        ? "v0-1.5-lg"
+        : "v0-1.5-md"
+    }",
     "thinking": true
   }
 }
@@ -185,7 +198,7 @@ Ready to create your V0 chat? Use the create_chat tool with your detailed projec
 function generateIterateChatPrompt(args: Record<string, any>) {
   const chatId = args.chat_id;
   const iterationType = args.iteration_type || "refinement";
-  
+
   if (!chatId) {
     return {
       role: "user" as const,
@@ -195,7 +208,7 @@ function generateIterateChatPrompt(args: Record<string, any>) {
       },
     };
   }
-  
+
   return {
     role: "user" as const,
     content: {
@@ -207,32 +220,42 @@ function generateIterateChatPrompt(args: Record<string, any>) {
 ### 1. Effective Iteration Strategies
 
 **For ${iterationType}:**
-${iterationType === 'refinement' ? `
+${
+  iterationType === "refinement"
+    ? `
 - Be specific about what needs improvement
 - Reference specific components or sections
 - Provide clear feedback on what's working vs. not working
 - Ask for specific styling or functionality changes
-` : iterationType === 'new_feature' ? `
+`
+    : iterationType === "new_feature"
+    ? `
 - Clearly describe the new feature
 - Explain how it should integrate with existing code
 - Provide user stories or use cases
 - Consider impact on existing functionality
-` : iterationType === 'bug_fix' ? `
+`
+    : iterationType === "bug_fix"
+    ? `
 - Describe the specific issue or error
 - Provide steps to reproduce the problem
 - Include any error messages
 - Mention expected vs. actual behavior
-` : iterationType === 'styling' ? `
+`
+    : iterationType === "styling"
+    ? `
 - Be specific about design changes
 - Reference color schemes, layouts, spacing
 - Mention responsive behavior
 - Include accessibility considerations
-` : `
+`
+    : `
 - Be clear about your goals
 - Provide specific feedback
 - Reference existing components when relevant
 - Explain the desired outcome
-`}
+`
+}
 
 ### 2. Use the create_message Tool
 \`\`\`json
@@ -265,7 +288,7 @@ Ready to iterate? Use the create_message tool with your specific improvement req
 
 function generateOrganizeChatsPrompt(args: Record<string, any>) {
   const action = args.action || "organize";
-  
+
   return {
     role: "user" as const,
     content: {
@@ -329,10 +352,15 @@ Use the favorite_chat tool to mark your best or most important chats:
 - Regularly review and unfavorite completed projects
 - Use privacy settings appropriately for team collaboration
 
-${action === 'list' ? 'Start by using the find_chats tool to see all your chats.' : 
-  action === 'search' ? 'Use find_chats with specific filters to find what you need.' :
-  action === 'favorite' ? 'Use favorite_chat to mark important chats.' :
-  'Begin with find_chats to see your current chat organization.'}`,
+${
+  action === "list"
+    ? "Start by using the find_chats tool to see all your chats."
+    : action === "search"
+    ? "Use find_chats with specific filters to find what you need."
+    : action === "favorite"
+    ? "Use favorite_chat to mark important chats."
+    : "Begin with find_chats to see your current chat organization."
+}`,
     },
   };
 }
@@ -340,7 +368,7 @@ ${action === 'list' ? 'Start by using the find_chats tool to see all your chats.
 function generateProjectSetupPrompt(args: Record<string, any>) {
   const projectName = args.project_name || "My V0 Project";
   const framework = args.framework || "React";
-  
+
   return {
     role: "user" as const,
     content: {
@@ -415,7 +443,7 @@ Ready to start? Begin by using the create_project tool with your project details
 
 function generateWorkflowOptimizationPrompt(args: Record<string, any>) {
   const useCase = args.use_case || "development";
-  
+
   return {
     role: "user" as const,
     content: {
@@ -440,31 +468,39 @@ function generateWorkflowOptimizationPrompt(args: Record<string, any>) {
 
 ### 2. ${useCase} Optimization:
 
-${useCase === 'prototyping' ? `
+${
+  useCase === "prototyping"
+    ? `
 **Prototyping Focus:**
 - Use v0-1.5-sm model for quick iterations
 - Create multiple chat variants for A/B concepts
 - Focus on core functionality before polish
 - Use create_message for rapid iterations
-` : useCase === 'production' ? `
+`
+    : useCase === "production"
+    ? `
 **Production Focus:**
 - Use v0-1.5-lg model for complex, robust code
 - Create detailed project documentation
 - Implement comprehensive error handling
 - Focus on performance and accessibility
-` : useCase === 'learning' ? `
+`
+    : useCase === "learning"
+    ? `
 **Learning Focus:**
 - Ask for explanations in your messages
 - Request code comments and documentation
 - Create focused chats for specific concepts
 - Use thinking mode for detailed reasoning
-` : `
+`
+    : `
 **General Development:**
 - Balance model size with complexity needs
 - Organize chats by feature or component
 - Use systematic iteration approaches
 - Maintain clear project structure
-`}
+`
+}
 
 ### 3. Advanced Techniques:
 
@@ -530,7 +566,7 @@ Optimize your ${useCase} workflow by implementing these strategies systematicall
 
 function generateTroubleshootingPrompt(args: Record<string, any>) {
   const issueType = args.issue_type || "general";
-  
+
   return {
     role: "user" as const,
     content: {
@@ -542,27 +578,35 @@ function generateTroubleshootingPrompt(args: Record<string, any>) {
 ### 1. Common Issue Resolution:
 
 **${issueType} Issues:**
-${issueType === 'api_error' ? `
+${
+  issueType === "api_error"
+    ? `
 - Check your API key authorization
 - Verify OAuth token is valid
 - Ensure proper session management
 - Review error messages for specific details
-` : issueType === 'chat_problem' ? `
+`
+    : issueType === "chat_problem"
+    ? `
 - Verify chat ID exists using find_chats
 - Check if chat is accessible (privacy settings)
 - Ensure proper message formatting
 - Try refreshing your session
-` : issueType === 'project_issue' ? `
+`
+    : issueType === "project_issue"
+    ? `
 - Verify project exists and is accessible
 - Check project permissions and settings
 - Ensure proper project association
 - Review project configuration
-` : `
+`
+    : `
 - Start with basic connectivity tests
 - Check authentication status
 - Review recent error messages
 - Try simple operations first
-`}
+`
+}
 
 ### 2. Diagnostic Steps:
 
@@ -636,13 +680,13 @@ ${issueType === 'api_error' ? `
 **Debugging Commands:**
 \`\`\`bash
 # Check MCP server status
-curl http://localhost:3000/ping
+curl http://localhost:3000/api/ping
 
 # Verify OAuth endpoints
-curl http://localhost:3000/.well-known/oauth-authorization-server
+curl http://localhost:3000/api/.well-known/oauth-authorization-server
 
 # Test protected resource metadata
-curl http://localhost:3000/.well-known/oauth-protected-resource
+curl http://localhost:3000/api/.well-known/oauth-protected-resource
 \`\`\`
 
 **Recovery Steps:**

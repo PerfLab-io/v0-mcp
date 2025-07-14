@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import "dotenv/config";
 import { Hono } from "hono";
-import { serve } from "@hono/node-server";
+import { handle } from "hono/vercel";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import {
@@ -23,12 +23,18 @@ import {
   favoriteChatSchema,
   listFiles,
   listFilesSchema,
-} from "../v0/index.js";
-import { sessionApiKeyStore } from "../v0/client.js";
-import { oauthProvider, oauthRouter, AccessToken } from "./oauth-provider.js";
-import { v0Prompts, getPromptContent } from "../prompts/index.js";
-import { sessionFileStore } from "../resources/sessionFileStore.js";
-import { sessionManager } from "../services/sessionManager.js";
+} from "@/v0/index";
+import { sessionApiKeyStore } from "@/v0/client";
+import {
+  oauthProvider,
+  oauthRouter,
+  AccessToken,
+} from "@/app/api/[[...route]]/oauth-provider";
+import { v0Prompts, getPromptContent } from "@/prompts/index";
+import { sessionFileStore } from "@/resources/sessionFileStore";
+import { sessionManager } from "@/services/sessionManager";
+
+export const runtime = "nodejs";
 
 type Env = {
   Variables: {
@@ -273,7 +279,7 @@ async function getSession(
   return session;
 }
 
-const app = new Hono<Env>();
+const app = new Hono<Env>().basePath("/api");
 
 app.use(
   "*",
@@ -292,7 +298,7 @@ app.route("/oauth", oauthRouter);
 app.get("/.well-known/oauth-authorization-server", (c) => {
   const protocol = c.req.header("x-forwarded-proto") || "http";
   const host = c.req.header("host") || "localhost:3000";
-  const baseUrl = `${protocol}://${host}`;
+  const baseUrl = `${protocol}://${host}/api`;
   return c.json(
     oauthProvider.getAuthorizationServerMetadata(`${baseUrl}/oauth`)
   );
@@ -302,7 +308,7 @@ app.get("/.well-known/oauth-authorization-server", (c) => {
 app.get("/.well-known/oauth-authorization-server/oauth", (c) => {
   const protocol = c.req.header("x-forwarded-proto") || "http";
   const host = c.req.header("host") || "localhost:3000";
-  const baseUrl = `${protocol}://${host}`;
+  const baseUrl = `${protocol}://${host}/api`;
   return c.json(
     oauthProvider.getAuthorizationServerMetadata(`${baseUrl}/oauth`)
   );
@@ -313,7 +319,7 @@ app.use("/mcp", async (c, next) => {
   const authHeader = c.req.header("Authorization");
   const protocol = c.req.header("x-forwarded-proto") || "http";
   const host = c.req.header("host") || "localhost:3000";
-  const baseUrl = `${protocol}://${host}`;
+  const baseUrl = `${protocol}://${host}/api`;
 
   // Check if authorization is required and present
   if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -425,7 +431,7 @@ app.get("/ping", async (c) => {
 app.get("/.well-known/oauth-protected-resource", (c) => {
   const protocol = c.req.header("x-forwarded-proto") || "http";
   const host = c.req.header("host") || "localhost:3000";
-  const baseUrl = `${protocol}://${host}`;
+  const baseUrl = `${protocol}://${host}/api`;
   const authServerUrl = `${baseUrl}/oauth`;
   return c.json(
     oauthProvider.getProtectedResourceMetadata(baseUrl, authServerUrl)
@@ -509,7 +515,7 @@ app.post("/mcp", async (c) => {
     let currentApiKey: string | null = null;
     try {
       // The access token is the encrypted API key, decrypt it using the client_id
-      const { decryptApiKey } = await import("../utils/crypto.js");
+      const { decryptApiKey } = await import("@/lib/crypto");
       currentApiKey = decryptApiKey(accessToken.token, accessToken.clientId);
 
       // Set current session in the API key store for backward compatibility
@@ -1146,42 +1152,50 @@ app.delete("/mcp", async (c) => {
   return c.text("", 404);
 });
 
+const handler = handle(app);
+
+export const GET = handler;
+export const POST = handler;
+export const PATCH = handler;
+export const PUT = handler;
+export const OPTIONS = handler;
+
 // Cleanup on shutdown
-process.on("SIGINT", () => {
-  console.log("Shutting down server...");
-  for (const [sessionId, controller] of sseControllers) {
-    try {
-      controller.close();
-    } catch {
-      // Controller might already be closed
-    }
-    sseControllers.delete(sessionId);
-  }
-  process.exit(0);
-});
+// process.on("SIGINT", () => {
+//   console.log("Shutting down server...");
+//   for (const [sessionId, controller] of sseControllers) {
+//     try {
+//       controller.close();
+//     } catch {
+//       // Controller might already be closed
+//     }
+//     sseControllers.delete(sessionId);
+//   }
+//   process.exit(0);
+// });
 
-// Start the server
-async function main() {
-  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+// // Start the server
+// async function main() {
+//   const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-  console.log(`🚀 v0 MCP Server running on http://localhost:${port}/mcp`);
-  console.log("📡 Streamable HTTP transport ready");
-  console.log("🔗 MCP Endpoint: POST/GET http://localhost:3000/mcp");
-  console.log("🔐 OAuth Authorization: http://localhost:3000/oauth/authorize");
-  console.log(
-    "🔍 OAuth Metadata: http://localhost:3000/.well-known/oauth-authorization-server"
-  );
-  console.log(
-    "🛡️  Resource Metadata: http://localhost:3000/.well-known/oauth-protected-resource"
-  );
-  console.log("💓 Health check: GET http://localhost:3000/ping");
+//   console.log(`🚀 v0 MCP Server running on http://localhost:${port}/mcp`);
+//   console.log("📡 Streamable HTTP transport ready");
+//   console.log("🔗 MCP Endpoint: POST/GET http://localhost:3000/mcp");
+//   console.log("🔐 OAuth Authorization: http://localhost:3000/oauth/authorize");
+//   console.log(
+//     "🔍 OAuth Metadata: http://localhost:3000/.well-known/oauth-authorization-server"
+//   );
+//   console.log(
+//     "🛡️  Resource Metadata: http://localhost:3000/.well-known/oauth-protected-resource"
+//   );
+//   console.log("💓 Health check: GET http://localhost:3000/ping");
 
-  serve({
-    fetch: app.fetch,
-    port,
-  });
-}
+//   serve({
+//     fetch: app.fetch,
+//     port,
+//   });
+// }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(console.error);
-}
+// if (import.meta.url === `file://${process.argv[1]}`) {
+//   main().catch(console.error);
+// }

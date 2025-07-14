@@ -30,3 +30,17 @@ lerna-debug.log*
 # misc
 .DS_Store
 .vercel
+
+# next.js
+.next/
+out/
+
+# production
+build
+
+# env files
+.env*
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
