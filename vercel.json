@@ -1,10 +1,6 @@
 {
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api"
-    },
-    {
       "source": "/test",
       "destination": "/api/ping"
     },
@@ -27,6 +23,10 @@
     {
       "source": "/.well-known/oauth-protected-resource",
       "destination": "/api/.well-known/oauth-protected-resource"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
     }
   ]
 }
