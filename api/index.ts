@@ -1,7 +1,6 @@
-#!/usr/bin/env node
 import "dotenv/config";
 import { Hono } from "hono";
-import { serve } from "@hono/node-server";
+import { handle } from "hono/vercel";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import {
@@ -31,7 +30,7 @@ const sseControllers = new Map<
   ReadableStreamDefaultController<Uint8Array>
 >();
 
-const app = new Hono<Env>();
+const app = new Hono<Env>().basePath("/api");
 
 app.use(
   "*",
@@ -897,40 +896,10 @@ app.delete("/mcp", async (c) => {
   return c.text("", 404);
 });
 
-process.on("SIGINT", () => {
-  console.log("Shutting down server...");
-  for (const [sessionId, controller] of sseControllers) {
-    try {
-      controller.close();
-    } catch {
-      // Controller might already be closed
-    }
-    sseControllers.delete(sessionId);
-  }
-  process.exit(0);
-});
+const handler = handle(app);
 
-async function main() {
-  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-
-  console.log(`🚀 v0 MCP Server running on http://localhost:${port}/mcp`);
-  console.log("📡 Streamable HTTP transport ready");
-  console.log("🔗 MCP Endpoint: POST/GET http://localhost:3000/mcp");
-  console.log("🔐 OAuth Authorization: http://localhost:3000/oauth/authorize");
-  console.log(
-    "🔍 OAuth Metadata: http://localhost:3000/.well-known/oauth-authorization-server"
-  );
-  console.log(
-    "🛡️  Resource Metadata: http://localhost:3000/.well-known/oauth-protected-resource"
-  );
-  console.log("💓 Health check: GET http://localhost:3000/ping");
-
-  serve({
-    fetch: app.fetch,
-    port,
-  });
-}
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(console.error);
-}
+export const GET = handler;
+export const POST = handler;
+export const PATCH = handler;
+export const PUT = handler;
+export const OPTIONS = handler;
