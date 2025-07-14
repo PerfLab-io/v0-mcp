@@ -14,8 +14,8 @@ An MCP (Model Context Protocol) server that exposes v0.dev APIs for AI-powered d
 ## Setup
 
 ```bash
-npm install
-npm run start
+pnpm install
+pnpm dev
 ```
 
 
