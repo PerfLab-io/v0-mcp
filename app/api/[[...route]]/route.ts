@@ -246,39 +246,6 @@ function createMcpServer(): McpServer {
   return server;
 }
 
-async function getSession(
-  sessionId?: string,
-  clientInfo?: { name: string; version: string }
-): Promise<Session> {
-  console.log("getSession called with:", sessionId, "clientInfo:", clientInfo);
-
-  // Get or create session using database session manager
-  const sessionData = await sessionManager.createOrGetSession(
-    sessionId,
-    clientInfo
-  );
-
-  console.log(
-    "Using session:",
-    sessionData.id,
-    "clientType:",
-    sessionData.clientType
-  );
-
-  // Create the in-memory MCP server instance
-  const session: Session = {
-    id: sessionData.id,
-    server: createMcpServer(),
-    createdAt: sessionData.createdAt,
-    lastActivity: sessionData.lastActivity,
-    clientType: sessionData.clientType,
-    clientInfo,
-    sseController: sseControllers.get(sessionData.id),
-  };
-
-  return session;
-}
-
 const app = new Hono<Env>().basePath("/api");
 
 app.use(
