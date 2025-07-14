@@ -220,10 +220,8 @@ class V0OAuthProvider {
 
 export const oauthProvider = new V0OAuthProvider();
 
-// OAuth router
 export const oauthRouter = new Hono();
 
-// Authorization endpoint - presents form for API key input (Step 10 in sequence diagram)
 oauthRouter.get("/authorize", (c) => {
   const query = c.req.query();
   console.log("OAuth authorize request query parameters:", query);
@@ -326,7 +324,6 @@ oauthRouter.get("/authorize", (c) => {
   return c.html(html);
 });
 
-// Handle authorization form submission (Step 11-12 in sequence diagram)
 oauthRouter.post("/authorize", async (c) => {
   const formData = await c.req.formData();
   const clientId = formData.get("client_id") as string;
@@ -370,7 +367,6 @@ oauthRouter.post("/authorize", async (c) => {
   return c.redirect(redirectUrl.toString());
 });
 
-// Token endpoint
 oauthRouter.post("/token", async (c) => {
   const formData = await c.req.formData();
   const grantType = formData.get("grant_type") as string;
@@ -403,7 +399,6 @@ oauthRouter.post("/token", async (c) => {
   });
 });
 
-// Introspection endpoint
 oauthRouter.post("/introspect", async (c) => {
   const formData = await c.req.formData();
   const token = formData.get("token") as string;
@@ -426,7 +421,6 @@ oauthRouter.post("/introspect", async (c) => {
   });
 });
 
-// Dynamic Client Registration endpoint (RFC 7591)
 oauthRouter.post("/register", async (c) => {
   try {
     const registration = await c.req.json();
@@ -482,7 +476,6 @@ oauthRouter.post("/register", async (c) => {
   }
 });
 
-// Token revocation endpoint (RFC 7009)
 oauthRouter.post("/revoke", async (c) => {
   try {
     const formData = await c.req.formData();
