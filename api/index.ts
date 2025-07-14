@@ -463,12 +463,22 @@ app.post("/mcp", async (c) => {
         console.log("Using existing session:", session.id);
       } else {
         // Session ID provided but not found - create new session with that ID
-        session = await sessionManager.createOrGetSession(sessionId, clientInfo);
+        const accessToken = c.get("accessToken");
+        session = await sessionManager.createOrGetSession(
+          sessionId,
+          clientInfo,
+          accessToken?.clientId
+        );
         console.log("Created new session with provided ID:", session.id);
       }
     } else {
       // No session ID provided - create new session
-      session = await sessionManager.createOrGetSession(undefined, clientInfo);
+      const accessToken = c.get("accessToken");
+      session = await sessionManager.createOrGetSession(
+        undefined,
+        clientInfo,
+        accessToken?.clientId
+      );
       console.log("Created new session (no ID provided):", session.id);
     }
 
@@ -501,7 +511,7 @@ app.post("/mcp", async (c) => {
       // The access token is the encrypted API key, decrypt it using the client_id
       const { decryptApiKey } = await import("../utils/crypto.js");
       currentApiKey = decryptApiKey(accessToken.token, accessToken.clientId);
-      
+
       // Set current session in the API key store for backward compatibility
       sessionApiKeyStore.setCurrentSession(session.id);
       sessionApiKeyStore.setSessionApiKey(session.id, currentApiKey);
@@ -509,7 +519,7 @@ app.post("/mcp", async (c) => {
     } catch (error) {
       console.error(`Failed to decrypt API key from token: ${error}`);
     }
-    
+
     if (!currentApiKey) {
       console.log(
         `Warning: No API key available for token ${accessToken.token.substring(
@@ -1123,7 +1133,9 @@ app.delete("/mcp", async (c) => {
 
   if (sessionId) {
     // Clean up session from all stores
-    await sessionManager.clearSession(sessionId);
+    // TODO: we are not deleting the session from the database to keep statistics
+    // Analyze if this impacts the protocol usage
+    // await sessionManager.clearSession(sessionId);
     sessionApiKeyStore.clearSession(sessionId);
     sessionFileStore.clearSession(sessionId);
     sseControllers.delete(sessionId);
