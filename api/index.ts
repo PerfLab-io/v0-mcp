@@ -30,7 +30,7 @@ const sseControllers = new Map<
   ReadableStreamDefaultController<Uint8Array>
 >();
 
-const app = new Hono<Env>().basePath("/api");
+const app = new Hono<Env>();
 
 app.use(
   "*",
