@@ -5,24 +5,13 @@ import { handle } from "hono/vercel";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import {
-  McpServer,
-  ResourceTemplate,
-} from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
   createChat,
-  createChatSchema,
   getUserInfo,
-  getUserInfoSchema,
   createProject,
-  createProjectSchema,
   createMessage,
-  createMessageSchema,
   findChats,
-  findChatsSchema,
   favoriteChat,
-  favoriteChatSchema,
   listFiles,
-  listFilesSchema,
 } from "@/v0/index";
 import { sessionApiKeyStore } from "@/v0/client";
 import {
@@ -33,6 +22,7 @@ import {
 import { v0Prompts, getPromptContent } from "@/prompts/index";
 import { sessionFileStore } from "@/resources/sessionFileStore";
 import { sessionManager } from "@/services/sessionManager";
+import { getMimeType } from "@/lib/utils";
 
 export const runtime = "nodejs";
 
@@ -41,210 +31,11 @@ type Env = {
     accessToken: AccessToken;
   };
 };
-interface Session {
-  id: string;
-  server: McpServer;
-  createdAt: Date;
-  lastActivity: Date;
-  sseController?: ReadableStreamDefaultController<Uint8Array>;
-  clientType: "mcpserver" | "generic";
-  clientInfo?: {
-    name: string;
-    version: string;
-  };
-}
 
 const sseControllers = new Map<
   string,
   ReadableStreamDefaultController<Uint8Array>
 >();
-
-// Helper function to get MIME type from language
-function getMimeType(language: string): string {
-  const mimeTypes: Record<string, string> = {
-    javascript: "text/javascript",
-    typescript: "text/typescript",
-    jsx: "text/jsx",
-    tsx: "text/tsx",
-    html: "text/html",
-    css: "text/css",
-    json: "application/json",
-    python: "text/x-python",
-    java: "text/x-java-source",
-    cpp: "text/x-c++src",
-    c: "text/x-csrc",
-    rust: "text/x-rust",
-    go: "text/x-go",
-    php: "text/x-php",
-    ruby: "text/x-ruby",
-    shell: "text/x-shellscript",
-    bash: "text/x-shellscript",
-    sql: "text/x-sql",
-    xml: "text/xml",
-    yaml: "text/yaml",
-    yml: "text/yaml",
-    markdown: "text/markdown",
-    md: "text/markdown",
-  };
-
-  return mimeTypes[language.toLowerCase()] || "text/plain";
-}
-
-function createMcpServer(): McpServer {
-  const server = new McpServer({
-    name: "v0-mcp",
-    version: "1.0.0",
-  });
-
-  server.registerTool(
-    "create_chat",
-    {
-      title: "Create v0 Chat",
-      description: "Create a new v0 chat session with AI",
-      inputSchema: createChatSchema.shape,
-    },
-    async (args) => {
-      const response = await createChat(args);
-      return response.result;
-    }
-  );
-
-  server.registerTool(
-    "get_user_info",
-    {
-      title: "Get v0 User Info",
-      description: "Retrieve user information from v0",
-      inputSchema: getUserInfoSchema.shape,
-    },
-    async (args) => {
-      const response = await getUserInfo();
-      return response.result;
-    }
-  );
-
-  server.registerTool(
-    "create_project",
-    {
-      title: "Create v0 Project",
-      description: "Create a new project in v0",
-      inputSchema: createProjectSchema.shape,
-    },
-    async (args) => {
-      const response = await createProject(args);
-      return response.result;
-    }
-  );
-
-  server.registerTool(
-    "create_message",
-    {
-      title: "Create v0 Chat Message",
-      description: "Add a new message to an existing v0 chat",
-      inputSchema: createMessageSchema.shape,
-    },
-    async (args) => {
-      const response = await createMessage(args);
-      return response.result;
-    }
-  );
-
-  server.registerTool(
-    "find_chats",
-    {
-      title: "Find v0 Chats",
-      description: "Search and list v0 chats with optional filtering",
-      inputSchema: findChatsSchema.shape,
-    },
-    async (args) => {
-      const response = await findChats(args);
-      return response.result;
-    }
-  );
-
-  server.registerTool(
-    "favorite_chat",
-    {
-      title: "Favorite/Unfavorite v0 Chat",
-      description: "Mark a v0 chat as favorite or remove from favorites",
-      inputSchema: favoriteChatSchema.shape,
-    },
-    async (args) => {
-      const response = await favoriteChat(args);
-      return response.result;
-    }
-  );
-
-  server.registerTool(
-    "list_files",
-    {
-      title: "List Session Files",
-      description:
-        "List all files generated in the current session from V0 chats and messages",
-      inputSchema: listFilesSchema.shape,
-    },
-    async (args) => {
-      const response = await listFiles(args);
-      return response.result;
-    }
-  );
-
-  server.registerResource(
-    "v0-user-config",
-    "v0://user/config",
-    {
-      title: "v0 User Configuration",
-      description: "User configuration and settings from v0",
-      mimeType: "application/json",
-    },
-    async (uri) => ({
-      contents: [
-        {
-          uri: uri.href,
-          text: JSON.stringify(
-            {
-              userId: "example-user",
-              settings: {
-                theme: "dark",
-                language: "en",
-              },
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    })
-  );
-
-  server.registerResource(
-    "v0-project-info",
-    new ResourceTemplate("v0://projects/{projectId}", { list: undefined }),
-    {
-      title: "v0 Project Information",
-      description: "Detailed information about a v0 project",
-      mimeType: "application/json",
-    },
-    async (uri, { projectId }) => ({
-      contents: [
-        {
-          uri: uri.href,
-          text: JSON.stringify(
-            {
-              projectId,
-              name: `Project ${projectId}`,
-              status: "active",
-              created: new Date().toISOString(),
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    })
-  );
-
-  return server;
-}
 
 const app = new Hono<Env>().basePath("/api");
 
@@ -271,7 +62,6 @@ app.get("/.well-known/oauth-authorization-server", (c) => {
   );
 });
 
-// OAuth Authorization Server Metadata with issuer path (RFC 8414)
 app.get("/.well-known/oauth-authorization-server/oauth", (c) => {
   const protocol = c.req.header("x-forwarded-proto") || "http";
   const host = c.req.header("host") || "localhost:3000";
@@ -281,7 +71,6 @@ app.get("/.well-known/oauth-authorization-server/oauth", (c) => {
   );
 });
 
-// Authorization middleware - handles OAuth token validation only
 app.use("/mcp", async (c, next) => {
   const authHeader = c.req.header("Authorization");
   const protocol = c.req.header("x-forwarded-proto") || "http";
@@ -383,7 +172,6 @@ app.use("/mcp", async (c, next) => {
   await next();
 });
 
-// Health check endpoint
 app.get("/ping", async (c) => {
   const sessionCount = await sessionManager.getActiveSessionCount();
   return c.json({
@@ -394,7 +182,6 @@ app.get("/ping", async (c) => {
   });
 });
 
-// OAuth Protected Resource Metadata endpoint (Step 4 in sequence diagram)
 app.get("/.well-known/oauth-protected-resource", (c) => {
   const protocol = c.req.header("x-forwarded-proto") || "http";
   const host = c.req.header("host") || "localhost:3000";
@@ -405,7 +192,6 @@ app.get("/.well-known/oauth-protected-resource", (c) => {
   );
 });
 
-// Handle MCP POST requests
 app.post("/mcp", async (c) => {
   try {
     const sessionId = c.req.header("mcp-session-id");
@@ -990,7 +776,6 @@ app.post("/mcp", async (c) => {
   }
 });
 
-// Handle GET requests for SSE (Server-Sent Events)
 app.get("/mcp", async (c) => {
   console.log("GET / request received");
 
@@ -1100,7 +885,6 @@ app.get("/mcp", async (c) => {
   });
 });
 
-// Handle session termination
 app.delete("/mcp", async (c) => {
   const sessionId = c.req.header("mcp-session-id");
 
@@ -1126,43 +910,3 @@ export const POST = handler;
 export const PATCH = handler;
 export const PUT = handler;
 export const OPTIONS = handler;
-
-// Cleanup on shutdown
-// process.on("SIGINT", () => {
-//   console.log("Shutting down server...");
-//   for (const [sessionId, controller] of sseControllers) {
-//     try {
-//       controller.close();
-//     } catch {
-//       // Controller might already be closed
-//     }
-//     sseControllers.delete(sessionId);
-//   }
-//   process.exit(0);
-// });
-
-// // Start the server
-// async function main() {
-//   const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-
-//   console.log(`🚀 v0 MCP Server running on http://localhost:${port}/mcp`);
-//   console.log("📡 Streamable HTTP transport ready");
-//   console.log("🔗 MCP Endpoint: POST/GET http://localhost:3000/mcp");
-//   console.log("🔐 OAuth Authorization: http://localhost:3000/oauth/authorize");
-//   console.log(
-//     "🔍 OAuth Metadata: http://localhost:3000/.well-known/oauth-authorization-server"
-//   );
-//   console.log(
-//     "🛡️  Resource Metadata: http://localhost:3000/.well-known/oauth-protected-resource"
-//   );
-//   console.log("💓 Health check: GET http://localhost:3000/ping");
-
-//   serve({
-//     fetch: app.fetch,
-//     port,
-//   });
-// }
-
-// if (import.meta.url === `file://${process.argv[1]}`) {
-//   main().catch(console.error);
-// }
