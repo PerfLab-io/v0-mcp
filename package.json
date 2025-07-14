@@ -1,5 +1,6 @@
 {
   "name": "v0-mcp",
+  "type": "module",
   "scripts": {
     "dev": "tsx watch api/index.ts",
     "build": "tsc",
