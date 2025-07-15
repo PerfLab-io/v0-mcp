@@ -29,7 +29,17 @@ const sseControllers = new Map<
 >();
 
 const app = new Hono<Env>();
-const _HOST = process.env.VERCEL_URL || "localhost:3000";
+
+// Helper function to get the base URL
+function getBaseUrl(c: any): string {
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  
+  const protocol = c.req.header('x-forwarded-proto') || 'http';
+  const host = c.req.header('host') || 'localhost:3000';
+  return `${protocol}://${host}`;
+}
 
 app.use(
   "*",
@@ -46,18 +56,7 @@ app.use("/*", logger());
 app.route("/oauth", oauthRouter);
 
 app.get("/.well-known/oauth-authorization-server", (c) => {
-  const protocol = c.req.header("x-forwarded-proto") || "http";
-  const host = c.req.header("host") || _HOST;
-  const baseUrl = `${protocol}://${host}`;
-  return c.json(
-    oauthProvider.getAuthorizationServerMetadata(`${baseUrl}/oauth`)
-  );
-});
-
-app.get("/.well-known/oauth-authorization-server/oauth", (c) => {
-  const protocol = c.req.header("x-forwarded-proto") || "http";
-  const host = c.req.header("host") || _HOST;
-  const baseUrl = `${protocol}://${host}`;
+  const baseUrl = getBaseUrl(c);
   return c.json(
     oauthProvider.getAuthorizationServerMetadata(`${baseUrl}/oauth`)
   );
@@ -65,9 +64,7 @@ app.get("/.well-known/oauth-authorization-server/oauth", (c) => {
 
 app.use("/mcp", async (c, next) => {
   const authHeader = c.req.header("Authorization");
-  const protocol = c.req.header("x-forwarded-proto") || "http";
-  const host = c.req.header("host") || _HOST;
-  const baseUrl = `${protocol}://${host}`;
+  const baseUrl = getBaseUrl(c);
 
   // Check if authorization is required and present
   if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -82,7 +79,7 @@ app.use("/mcp", async (c, next) => {
 
       c.header(
         "WWW-Authenticate",
-        `Bearer realm="${baseUrl}", authorization_uri="${authServerUrl}/authorize", resource_metadata_url="${resourceMetadataUrl}"`
+        `Bearer realm="${baseUrl}/mcp", authorization_uri="${authServerUrl}/authorize", resource_metadata_url="${resourceMetadataUrl}"`
       );
       return c.json(
         {
@@ -109,7 +106,7 @@ app.use("/mcp", async (c, next) => {
 
       c.header(
         "WWW-Authenticate",
-        `Bearer realm="${baseUrl}", authorization_uri="${authServerUrl}/authorize", resource_metadata_url="${resourceMetadataUrl}"`
+        `Bearer realm="${baseUrl}/mcp", authorization_uri="${authServerUrl}/authorize", resource_metadata_url="${resourceMetadataUrl}"`
       );
       return c.json(
         {
@@ -174,10 +171,46 @@ app.get("/ping", async (c) => {
   });
 });
 
+app.get("/test", async (c) => {
+  console.log('Test endpoint called - no database operations');
+  return c.json({
+    message: "Test endpoint working",
+    timestamp: new Date().toISOString(),
+    environment: {
+      VERCEL_URL: process.env.VERCEL_URL ? 'set' : 'not set',
+      DATABASE_URL: process.env.DATABASE_URL ? 'set' : 'not set',
+    }
+  });
+});
+
+app.get("/health", async (c) => {
+  try {
+    console.log('Health check: Testing database connection...');
+    const { db } = await import("../drizzle/index");
+    
+    // Simple query to test DB connection
+    const result = await db.execute("SELECT 1 as test");
+    console.log('Database connection test successful');
+    
+    return c.json({
+      status: "healthy",
+      database: "connected",
+      timestamp: new Date().toISOString(),
+      dbResult: result,
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    return c.json({
+      status: "unhealthy",
+      database: "disconnected",
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    }, 500);
+  }
+});
+
 app.get("/.well-known/oauth-protected-resource", (c) => {
-  const protocol = c.req.header("x-forwarded-proto") || "http";
-  const host = c.req.header("host") || _HOST;
-  const baseUrl = `${protocol}://${host}`;
+  const baseUrl = getBaseUrl(c);
   const authServerUrl = `${baseUrl}/oauth`;
   return c.json(
     oauthProvider.getProtectedResourceMetadata(baseUrl, authServerUrl)

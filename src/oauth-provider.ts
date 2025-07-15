@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { db } from "../drizzle/index";
-import { authorizationCodes, accessTokens } from "../drizzle/schema";
+import { authorizationCodes, accessTokens, registeredClients } from "../drizzle/schema";
 import { sessionApiKeyStore } from "../v0/client";
 import {
   encryptApiKey,
@@ -15,8 +15,21 @@ import crypto from "node:crypto";
 const TOKEN_EXPIRES_IN = 432000; // 5 days (5 * 24 * 60 * 60)
 const REFRESH_TOKEN_EXPIRES_IN = 2592000; // 30 days
 const CODE_EXPIRES_IN = 600; // 10 minutes
-const _protocol = process.env.VERCEL_URL ? "https" : "http";
-const _HOST = process.env.VERCEL_URL || "localhost:3000";
+
+// Helper function to get the base URL
+function getBaseUrl(c?: { req: { header: (name: string) => string | undefined } }): string {
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  
+  if (c) {
+    const protocol = c.req.header('x-forwarded-proto') || 'http';
+    const host = c.req.header('host') || 'localhost:3000';
+    return `${protocol}://${host}`;
+  }
+  
+  return 'http://localhost:3000';
+}
 
 export interface AccessToken {
   token: string;
@@ -37,25 +50,33 @@ class V0OAuthProvider {
     scope: string,
     v0ApiKey: string
   ): Promise<string> {
-    const code = randomUUID();
+    try {
+      console.log('Generating authorization code for client:', clientId);
+      const code = randomUUID();
 
-    // Encrypt the API key using the client_id
-    const encryptedApiKey = encryptApiKey(v0ApiKey, clientId);
+      // Encrypt the API key using the client_id
+      const encryptedApiKey = encryptApiKey(v0ApiKey, clientId);
 
-    const authCode = {
-      code,
-      clientId,
-      redirectUri,
-      codeChallenge,
-      codeChallengeMethod,
-      scope,
-      encryptedApiKey, // Store encrypted API key
-      createdAt: new Date(),
-      expiresAt: new Date(Date.now() + CODE_EXPIRES_IN * 1000),
-    };
+      const authCode = {
+        code,
+        clientId,
+        redirectUri,
+        codeChallenge,
+        codeChallengeMethod,
+        scope,
+        encryptedApiKey, // Store encrypted API key
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + CODE_EXPIRES_IN * 1000),
+      };
 
-    await db.insert(authorizationCodes).values(authCode);
-    return code;
+      console.log('Inserting authorization code into database...');
+      await db.insert(authorizationCodes).values(authCode);
+      console.log('Authorization code inserted successfully');
+      return code;
+    } catch (error) {
+      console.error('Error generating authorization code:', error);
+      throw error;
+    }
   }
 
   async exchangeCodeForToken(
@@ -64,14 +85,21 @@ class V0OAuthProvider {
     redirectUri: string,
     codeVerifier: string
   ): Promise<AccessToken | null> {
-    // Get authorization code from database
-    const result = await db
-      .select()
-      .from(authorizationCodes)
-      .where(eq(authorizationCodes.code, code))
-      .limit(1);
+    try {
+      console.log('Exchanging code for token, client:', clientId);
+      
+      // Get authorization code from database
+      console.log('Querying authorization codes...');
+      const result = await db
+        .select()
+        .from(authorizationCodes)
+        .where(eq(authorizationCodes.code, code))
+        .limit(1);
 
-    if (result.length === 0) return null;
+      if (result.length === 0) {
+        console.log('Authorization code not found');
+        return null;
+      }
 
     const authCode = result[0];
 
@@ -119,23 +147,56 @@ class V0OAuthProvider {
       refreshExpiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRES_IN * 1000),
     };
 
-    await db.insert(accessTokens).values(accessToken);
+      console.log('Inserting access token...');
+      await db.insert(accessTokens).values(accessToken);
 
-    // Store decrypted API key in sessionApiKeyStore for backward compatibility
-    sessionApiKeyStore.setSessionApiKey(token, decryptedApiKey);
+      // Store decrypted API key in sessionApiKeyStore for backward compatibility
+      sessionApiKeyStore.setSessionApiKey(token, decryptedApiKey);
 
-    await db
-      .delete(authorizationCodes)
-      .where(eq(authorizationCodes.code, code));
+      console.log('Cleaning up authorization code...');
+      await db
+        .delete(authorizationCodes)
+        .where(eq(authorizationCodes.code, code));
 
-    return {
-      token,
-      clientId,
-      scope: authCode.scope,
-      createdAt: accessToken.createdAt,
-      expiresAt: accessToken.expiresAt,
-      refreshToken: refreshToken,
-    };
+      console.log('Token exchange completed successfully');
+      return {
+        token,
+        clientId,
+        scope: authCode.scope,
+        createdAt: accessToken.createdAt,
+        expiresAt: accessToken.expiresAt,
+        refreshToken: refreshToken,
+      };
+    } catch (error) {
+      console.error('Error exchanging code for token:', error);
+      return null;
+    }
+  }
+
+  async validateClient(clientId: string): Promise<boolean> {
+    try {
+      const result = await db
+        .select()
+        .from(registeredClients)
+        .where(eq(registeredClients.clientId, clientId))
+        .limit(1);
+
+      if (result.length === 0) {
+        return false;
+      }
+
+      const client = result[0];
+      
+      // Check if client is expired
+      if (client.expiresAt && client.expiresAt < new Date()) {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error validating client:", error);
+      return false;
+    }
   }
 
   async validateToken(token: string): Promise<AccessToken | null> {
@@ -208,7 +269,7 @@ class V0OAuthProvider {
 
   getProtectedResourceMetadata(baseUrl: string, authServerUrl: string) {
     return {
-      resource: baseUrl,
+      resource: `${baseUrl}/mcp`, // Canonical MCP server URI
       authorization_servers: [authServerUrl],
       scopes_supported: ["mcp:tools", "mcp:resources"],
       bearer_methods_supported: ["header"],
@@ -269,7 +330,8 @@ oauthRouter.get("/authorize", (c) => {
   }
 
   // Set default resource if not provided (MCP spec recommends it but some clients might not send it)
-  const resourceParam = resource || `${_protocol}://${_HOST}/mcp`;
+  const baseUrl = getBaseUrl(c);
+  const resourceParam = resource || `${baseUrl}/mcp`;
 
   // Return HTML form for API key input
   const html = `
@@ -365,9 +427,8 @@ oauthRouter.post("/authorize", async (c) => {
   redirectUrl.searchParams.set("code", code);
   if (state) redirectUrl.searchParams.set("state", state);
   // Add iss parameter as recommended by OAuth 2.1
-  const protocol = c.req.header("x-forwarded-proto") || "http";
-  const host = c.req.header("host") || _HOST;
-  redirectUrl.searchParams.set("iss", `${protocol}://${host}/oauth`);
+  const baseUrl = getBaseUrl(c);
+  redirectUrl.searchParams.set("iss", `${baseUrl}/oauth`);
 
   return c.redirect(redirectUrl.toString());
 });
@@ -431,11 +492,14 @@ oauthRouter.post("/introspect", async (c) => {
 // Dynamic Client Registration endpoint (RFC 7591)
 oauthRouter.post("/register", async (c) => {
   try {
+    console.log('Processing client registration request...');
     const registration = await c.req.json();
+    console.log('Registration data:', registration);
 
     // Generate client credentials
     const clientId = `mcp-client-${randomUUID()}`;
     const clientSecret = randomUUID(); // Optional for public clients
+    const registrationAccessToken = randomUUID();
 
     // Validate redirect URIs
     const redirectUris = registration.redirect_uris || [];
@@ -449,10 +513,28 @@ oauthRouter.post("/register", async (c) => {
       );
     }
 
+    // Store client registration in database
+    const clientRecord = {
+      clientId,
+      clientSecret,
+      clientName: registration.client_name || "MCP Client",
+      clientUri: registration.client_uri,
+      redirectUris,
+      grantTypes: ["authorization_code"],
+      responseTypes: ["code"],
+      scope: "mcp:tools mcp:resources",
+      tokenEndpointAuthMethod: "none", // Public client
+      registrationAccessToken,
+      createdAt: new Date(),
+      expiresAt: null, // Never expires
+    };
+
+    console.log('Inserting client registration into database...');
+    await db.insert(registeredClients).values(clientRecord);
+    console.log('Client registration inserted successfully');
+
     // Create client registration response
-    const protocol = c.req.header("x-forwarded-proto") || "http";
-    const host = c.req.header("host") || _HOST;
-    const baseUrl = `${protocol}://${host}/oauth`;
+    const baseUrl = `${getBaseUrl(c)}/oauth`;
 
     const response = {
       client_id: clientId,
@@ -467,7 +549,7 @@ oauthRouter.post("/register", async (c) => {
       token_endpoint_auth_method: "none", // Public client
       scope: "mcp:tools mcp:resources",
       registration_client_uri: `${baseUrl}/clients/${clientId}`,
-      registration_access_token: randomUUID(),
+      registration_access_token: registrationAccessToken,
     };
 
     console.log(`Registered new client: ${clientId}`);
