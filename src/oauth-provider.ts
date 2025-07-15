@@ -15,6 +15,8 @@ import {
 } from "../utils/crypto";
 import crypto from "node:crypto";
 
+export const runtime = "nodejs";
+
 // OAuth token expiration constants
 const TOKEN_EXPIRES_IN = 432000; // 5 days (5 * 24 * 60 * 60)
 const REFRESH_TOKEN_EXPIRES_IN = 2592000; // 30 days

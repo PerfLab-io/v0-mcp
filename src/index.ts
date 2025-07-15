@@ -62,6 +62,14 @@ app.get("/.well-known/oauth-authorization-server", (c) => {
   );
 });
 
+// Some clients might request the path-specific authorization server metadata
+app.get("/.well-known/oauth-authorization-server/oauth", (c) => {
+  const baseUrl = getBaseUrl(c);
+  return c.json(
+    oauthProvider.getAuthorizationServerMetadata(`${baseUrl}/oauth`)
+  );
+});
+
 app.use("/mcp", async (c, next) => {
   const authHeader = c.req.header("Authorization");
   const baseUrl = getBaseUrl(c);
