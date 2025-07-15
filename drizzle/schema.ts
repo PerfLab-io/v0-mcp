@@ -32,3 +32,19 @@ export const accessTokens = pgTable("access_tokens", {
   expiresAt: timestamp("expires_at").notNull(),
   refreshExpiresAt: timestamp("refresh_expires_at"),
 });
+
+export const registeredClients = pgTable("registered_clients", {
+  id: serial("id").primaryKey(),
+  clientId: varchar("client_id", { length: 255 }).notNull().unique(),
+  clientSecret: varchar("client_secret", { length: 255 }),
+  clientName: text("client_name"),
+  clientUri: text("client_uri"),
+  redirectUris: text("redirect_uris").array(), // Array of redirect URIs
+  grantTypes: text("grant_types").array().notNull().default(["authorization_code"]),
+  responseTypes: text("response_types").array().notNull().default(["code"]),
+  scope: text("scope").notNull().default("mcp:tools mcp:resources"),
+  tokenEndpointAuthMethod: varchar("token_endpoint_auth_method", { length: 20 }).notNull().default("none"),
+  registrationAccessToken: text("registration_access_token"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at"), // null = never expires
+});
