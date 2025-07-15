@@ -9,6 +9,7 @@ export default defineConfig(({ mode }) => {
   return {
     define: {
       "process.env.DATABASE_URL": JSON.stringify(env.DATABASE_URL),
+      "process.env.VERCEL_URL": JSON.stringify(env.VERCEL_URL),
     },
     plugins: [
       devServer({

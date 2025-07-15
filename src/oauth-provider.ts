@@ -15,6 +15,8 @@ import crypto from "node:crypto";
 const TOKEN_EXPIRES_IN = 432000; // 5 days (5 * 24 * 60 * 60)
 const REFRESH_TOKEN_EXPIRES_IN = 2592000; // 30 days
 const CODE_EXPIRES_IN = 600; // 10 minutes
+const _protocol = process.env.VERCEL_URL ? "https" : "http";
+const _HOST = process.env.VERCEL_URL || "localhost:3000";
 
 export interface AccessToken {
   token: string;
@@ -267,7 +269,7 @@ oauthRouter.get("/authorize", (c) => {
   }
 
   // Set default resource if not provided (MCP spec recommends it but some clients might not send it)
-  const resourceParam = resource || "http://localhost:3000/mcp";
+  const resourceParam = resource || `${_protocol}://${_HOST}/mcp`;
 
   // Return HTML form for API key input
   const html = `
@@ -364,7 +366,7 @@ oauthRouter.post("/authorize", async (c) => {
   if (state) redirectUrl.searchParams.set("state", state);
   // Add iss parameter as recommended by OAuth 2.1
   const protocol = c.req.header("x-forwarded-proto") || "http";
-  const host = c.req.header("host") || "localhost:3000";
+  const host = c.req.header("host") || _HOST;
   redirectUrl.searchParams.set("iss", `${protocol}://${host}/oauth`);
 
   return c.redirect(redirectUrl.toString());
@@ -449,7 +451,7 @@ oauthRouter.post("/register", async (c) => {
 
     // Create client registration response
     const protocol = c.req.header("x-forwarded-proto") || "http";
-    const host = c.req.header("host") || "localhost:3000";
+    const host = c.req.header("host") || _HOST;
     const baseUrl = `${protocol}://${host}/oauth`;
 
     const response = {

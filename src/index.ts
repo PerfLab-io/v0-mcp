@@ -29,6 +29,7 @@ const sseControllers = new Map<
 >();
 
 const app = new Hono<Env>();
+const _HOST = process.env.VERCEL_URL || "localhost:3000";
 
 app.use(
   "*",
@@ -46,7 +47,7 @@ app.route("/oauth", oauthRouter);
 
 app.get("/.well-known/oauth-authorization-server", (c) => {
   const protocol = c.req.header("x-forwarded-proto") || "http";
-  const host = c.req.header("host") || "localhost:3000";
+  const host = c.req.header("host") || _HOST;
   const baseUrl = `${protocol}://${host}`;
   return c.json(
     oauthProvider.getAuthorizationServerMetadata(`${baseUrl}/oauth`)
@@ -55,7 +56,7 @@ app.get("/.well-known/oauth-authorization-server", (c) => {
 
 app.get("/.well-known/oauth-authorization-server/oauth", (c) => {
   const protocol = c.req.header("x-forwarded-proto") || "http";
-  const host = c.req.header("host") || "localhost:3000";
+  const host = c.req.header("host") || _HOST;
   const baseUrl = `${protocol}://${host}`;
   return c.json(
     oauthProvider.getAuthorizationServerMetadata(`${baseUrl}/oauth`)
@@ -65,7 +66,7 @@ app.get("/.well-known/oauth-authorization-server/oauth", (c) => {
 app.use("/mcp", async (c, next) => {
   const authHeader = c.req.header("Authorization");
   const protocol = c.req.header("x-forwarded-proto") || "http";
-  const host = c.req.header("host") || "localhost:3000";
+  const host = c.req.header("host") || _HOST;
   const baseUrl = `${protocol}://${host}`;
 
   // Check if authorization is required and present
@@ -175,7 +176,7 @@ app.get("/ping", async (c) => {
 
 app.get("/.well-known/oauth-protected-resource", (c) => {
   const protocol = c.req.header("x-forwarded-proto") || "http";
-  const host = c.req.header("host") || "localhost:3000";
+  const host = c.req.header("host") || _HOST;
   const baseUrl = `${protocol}://${host}`;
   const authServerUrl = `${baseUrl}/oauth`;
   return c.json(
