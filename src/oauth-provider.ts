@@ -24,7 +24,10 @@ const CODE_EXPIRES_IN = 600; // 10 minutes
 function getBaseUrl(c?: {
   req: { header: (name: string) => string | undefined };
 }): string {
-  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+  if (
+    process.env.VERCEL_PROJECT_PRODUCTION_URL &&
+    import.meta.env.MODE === "production"
+  ) {
     return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
   }
 

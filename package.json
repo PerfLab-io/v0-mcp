@@ -1,10 +1,14 @@
 {
   "name": "v0-mcp",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "vitest"
+    "test": "vitest",
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "@hono/node-server": "^1.15.0",

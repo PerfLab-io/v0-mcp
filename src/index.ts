@@ -32,7 +32,10 @@ const app = new Hono<Env>();
 
 // Helper function to get the base URL
 function getBaseUrl(c: any): string {
-  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+  if (
+    process.env.VERCEL_PROJECT_PRODUCTION_URL &&
+    import.meta.env.MODE === "production"
+  ) {
     return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
   }
 
