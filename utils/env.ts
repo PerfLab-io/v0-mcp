@@ -3,7 +3,7 @@ import { z } from "zod";
 
 export const env = createEnv({
   server: {
-    DATABASE_URL: z.string().url(),
+    VITE_DATABASE_URL: z.string().url(),
   },
 
   /**
