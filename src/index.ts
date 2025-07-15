@@ -32,12 +32,12 @@ const app = new Hono<Env>();
 
 // Helper function to get the base URL
 function getBaseUrl(c: any): string {
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
   }
-  
-  const protocol = c.req.header('x-forwarded-proto') || 'http';
-  const host = c.req.header('host') || 'localhost:3000';
+
+  const protocol = c.req.header("x-forwarded-proto") || "http";
+  const host = c.req.header("host") || "localhost:3000";
   return `${protocol}://${host}`;
 }
 
@@ -172,26 +172,28 @@ app.get("/ping", async (c) => {
 });
 
 app.get("/test", async (c) => {
-  console.log('Test endpoint called - no database operations');
+  console.log("Test endpoint called - no database operations");
   return c.json({
     message: "Test endpoint working",
     timestamp: new Date().toISOString(),
     environment: {
-      VERCEL_URL: process.env.VERCEL_URL ? 'set' : 'not set',
-      DATABASE_URL: process.env.DATABASE_URL ? 'set' : 'not set',
-    }
+      VERCEL_PROJECT_PRODUCTION_URL: process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? "set"
+        : "not set",
+      DATABASE_URL: process.env.DATABASE_URL ? "set" : "not set",
+    },
   });
 });
 
 app.get("/health", async (c) => {
   try {
-    console.log('Health check: Testing database connection...');
+    console.log("Health check: Testing database connection...");
     const { db } = await import("../drizzle/index");
-    
+
     // Simple query to test DB connection
     const result = await db.execute("SELECT 1 as test");
-    console.log('Database connection test successful');
-    
+    console.log("Database connection test successful");
+
     return c.json({
       status: "healthy",
       database: "connected",
@@ -199,13 +201,16 @@ app.get("/health", async (c) => {
       dbResult: result,
     });
   } catch (error) {
-    console.error('Health check failed:', error);
-    return c.json({
-      status: "unhealthy",
-      database: "disconnected",
-      error: error instanceof Error ? error.message : String(error),
-      timestamp: new Date().toISOString(),
-    }, 500);
+    console.error("Health check failed:", error);
+    return c.json(
+      {
+        status: "unhealthy",
+        database: "disconnected",
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+      },
+      500
+    );
   }
 });
 

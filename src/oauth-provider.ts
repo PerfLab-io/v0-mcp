@@ -2,7 +2,11 @@ import { randomUUID } from "crypto";
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { db } from "../drizzle/index";
-import { authorizationCodes, accessTokens, registeredClients } from "../drizzle/schema";
+import {
+  authorizationCodes,
+  accessTokens,
+  registeredClients,
+} from "../drizzle/schema";
 import { sessionApiKeyStore } from "../v0/client";
 import {
   encryptApiKey,
@@ -17,18 +21,20 @@ const REFRESH_TOKEN_EXPIRES_IN = 2592000; // 30 days
 const CODE_EXPIRES_IN = 600; // 10 minutes
 
 // Helper function to get the base URL
-function getBaseUrl(c?: { req: { header: (name: string) => string | undefined } }): string {
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
+function getBaseUrl(c?: {
+  req: { header: (name: string) => string | undefined };
+}): string {
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
   }
-  
+
   if (c) {
-    const protocol = c.req.header('x-forwarded-proto') || 'http';
-    const host = c.req.header('host') || 'localhost:3000';
+    const protocol = c.req.header("x-forwarded-proto") || "http";
+    const host = c.req.header("host") || "localhost:3000";
     return `${protocol}://${host}`;
   }
-  
-  return 'http://localhost:3000';
+
+  return "http://localhost:3000";
 }
 
 export interface AccessToken {
@@ -51,7 +57,7 @@ class V0OAuthProvider {
     v0ApiKey: string
   ): Promise<string> {
     try {
-      console.log('Generating authorization code for client:', clientId);
+      console.log("Generating authorization code for client:", clientId);
       const code = randomUUID();
 
       // Encrypt the API key using the client_id
@@ -69,12 +75,12 @@ class V0OAuthProvider {
         expiresAt: new Date(Date.now() + CODE_EXPIRES_IN * 1000),
       };
 
-      console.log('Inserting authorization code into database...');
+      console.log("Inserting authorization code into database...");
       await db.insert(authorizationCodes).values(authCode);
-      console.log('Authorization code inserted successfully');
+      console.log("Authorization code inserted successfully");
       return code;
     } catch (error) {
-      console.error('Error generating authorization code:', error);
+      console.error("Error generating authorization code:", error);
       throw error;
     }
   }
@@ -86,10 +92,10 @@ class V0OAuthProvider {
     codeVerifier: string
   ): Promise<AccessToken | null> {
     try {
-      console.log('Exchanging code for token, client:', clientId);
-      
+      console.log("Exchanging code for token, client:", clientId);
+
       // Get authorization code from database
-      console.log('Querying authorization codes...');
+      console.log("Querying authorization codes...");
       const result = await db
         .select()
         .from(authorizationCodes)
@@ -97,68 +103,70 @@ class V0OAuthProvider {
         .limit(1);
 
       if (result.length === 0) {
-        console.log('Authorization code not found');
+        console.log("Authorization code not found");
         return null;
       }
 
-    const authCode = result[0];
+      const authCode = result[0];
 
-    // Validate authorization code
-    if (
-      authCode.clientId !== clientId ||
-      authCode.redirectUri !== redirectUri ||
-      authCode.expiresAt < new Date()
-    ) {
-      // Delete expired/invalid code
-      await db
-        .delete(authorizationCodes)
-        .where(eq(authorizationCodes.code, code));
-      return null;
-    }
+      // Validate authorization code
+      if (
+        authCode.clientId !== clientId ||
+        authCode.redirectUri !== redirectUri ||
+        authCode.expiresAt < new Date()
+      ) {
+        // Delete expired/invalid code
+        await db
+          .delete(authorizationCodes)
+          .where(eq(authorizationCodes.code, code));
+        return null;
+      }
 
-    // Validate PKCE
-    if (
-      !this.validatePKCE(
-        codeVerifier,
-        authCode.codeChallenge,
-        authCode.codeChallengeMethod
-      )
-    ) {
-      await db
-        .delete(authorizationCodes)
-        .where(eq(authorizationCodes.code, code));
-      return null;
-    }
+      // Validate PKCE
+      if (
+        !this.validatePKCE(
+          codeVerifier,
+          authCode.codeChallenge,
+          authCode.codeChallengeMethod
+        )
+      ) {
+        await db
+          .delete(authorizationCodes)
+          .where(eq(authorizationCodes.code, code));
+        return null;
+      }
 
-    // Decrypt the API key from the authorization code
-    const decryptedApiKey = decryptApiKey(authCode.encryptedApiKey, clientId);
+      // Decrypt the API key from the authorization code
+      const decryptedApiKey = decryptApiKey(authCode.encryptedApiKey, clientId);
 
-    // Use the encrypted API key as the access token
-    const token = authCode.encryptedApiKey; // The access token IS the encrypted API key
-    const refreshToken = generateAccessToken(); // Generate a separate refresh token
+      // Use the encrypted API key as the access token
+      const token = authCode.encryptedApiKey; // The access token IS the encrypted API key
+      const refreshToken = generateAccessToken(); // Generate a separate refresh token
 
-    const accessToken = {
-      token, // Store the encrypted API key as the token
-      clientId,
-      scope: authCode.scope,
-      refreshToken,
-      createdAt: new Date(),
-      expiresAt: new Date(Date.now() + TOKEN_EXPIRES_IN * 1000),
-      refreshExpiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRES_IN * 1000),
-    };
+      const accessToken = {
+        token, // Store the encrypted API key as the token
+        clientId,
+        scope: authCode.scope,
+        refreshToken,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + TOKEN_EXPIRES_IN * 1000),
+        refreshExpiresAt: new Date(
+          Date.now() + REFRESH_TOKEN_EXPIRES_IN * 1000
+        ),
+      };
 
-      console.log('Inserting access token...');
+      console.log("Inserting access token...");
       await db.insert(accessTokens).values(accessToken);
 
       // Store decrypted API key in sessionApiKeyStore for backward compatibility
       sessionApiKeyStore.setSessionApiKey(token, decryptedApiKey);
 
-      console.log('Cleaning up authorization code...');
+      console.log("Cleaning up authorization code...");
       await db
         .delete(authorizationCodes)
         .where(eq(authorizationCodes.code, code));
 
-      console.log('Token exchange completed successfully');
+      console.log("Token exchange completed successfully");
       return {
         token,
         clientId,
@@ -168,7 +176,7 @@ class V0OAuthProvider {
         refreshToken: refreshToken,
       };
     } catch (error) {
-      console.error('Error exchanging code for token:', error);
+      console.error("Error exchanging code for token:", error);
       return null;
     }
   }
@@ -186,7 +194,7 @@ class V0OAuthProvider {
       }
 
       const client = result[0];
-      
+
       // Check if client is expired
       if (client.expiresAt && client.expiresAt < new Date()) {
         return false;
@@ -492,9 +500,9 @@ oauthRouter.post("/introspect", async (c) => {
 // Dynamic Client Registration endpoint (RFC 7591)
 oauthRouter.post("/register", async (c) => {
   try {
-    console.log('Processing client registration request...');
+    console.log("Processing client registration request...");
     const registration = await c.req.json();
-    console.log('Registration data:', registration);
+    console.log("Registration data:", registration);
 
     // Generate client credentials
     const clientId = `mcp-client-${randomUUID()}`;
@@ -529,9 +537,9 @@ oauthRouter.post("/register", async (c) => {
       expiresAt: null, // Never expires
     };
 
-    console.log('Inserting client registration into database...');
+    console.log("Inserting client registration into database...");
     await db.insert(registeredClients).values(clientRecord);
-    console.log('Client registration inserted successfully');
+    console.log("Client registration inserted successfully");
 
     // Create client registration response
     const baseUrl = `${getBaseUrl(c)}/oauth`;

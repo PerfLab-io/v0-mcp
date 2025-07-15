@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-const _HOST = `http${process.env.VERCEL_URL ? "" : "s"}://${
-  process.env.VERCEL_URL || "localhost:3000"
+const _HOST = `http${process.env.VERCEL_PROJECT_PRODUCTION_URL ? "" : "s"}://${
+  process.env.VERCEL_PROJECT_PRODUCTION_URL || "localhost:3000"
 }`;
 // Prompt argument schema
 export const promptArgumentSchema = z.object({

@@ -9,7 +9,9 @@ export default defineConfig(({ mode }) => {
   return {
     define: {
       "process.env.DATABASE_URL": JSON.stringify(env.DATABASE_URL),
-      "process.env.VERCEL_URL": JSON.stringify(env.VERCEL_URL),
+      "process.env.VERCEL_PROJECT_PRODUCTION_URL": JSON.stringify(
+        env.VERCEL_PROJECT_PRODUCTION_URL
+      ),
     },
     plugins: [
       devServer({
@@ -18,6 +20,40 @@ export default defineConfig(({ mode }) => {
       build({
         entry: "./src/index.ts",
         minify: false,
+        vercel: {
+          config: {
+            routes: [
+              {
+                src: "/oauth/(.*)",
+                dest: "/",
+              },
+              {
+                src: "/mcp",
+                dest: "/",
+              },
+              {
+                src: "/.well-known/(.*)",
+                dest: "/",
+              },
+              {
+                src: "/ping",
+                dest: "/",
+              },
+              {
+                src: "/health",
+                dest: "/",
+              },
+              {
+                src: "/test",
+                dest: "/",
+              },
+              {
+                src: "/(.*)",
+                dest: "/",
+              },
+            ],
+          },
+        },
       }),
     ],
   };
