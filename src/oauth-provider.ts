@@ -17,12 +17,10 @@ import crypto from "node:crypto";
 
 export const runtime = "nodejs";
 
-// OAuth token expiration constants
 const TOKEN_EXPIRES_IN = 432000; // 5 days (5 * 24 * 60 * 60)
 const REFRESH_TOKEN_EXPIRES_IN = 2592000; // 30 days
 const CODE_EXPIRES_IN = 600; // 10 minutes
 
-// Helper function to get the base URL
 function getBaseUrl(c?: {
   req: { header: (name: string) => string | undefined };
 }): string {
@@ -62,7 +60,6 @@ class V0OAuthProvider {
       console.log("Generating authorization code for client:", clientId);
       const code = randomUUID();
 
-      // Encrypt the API key using the client_id
       const encryptedApiKey = encryptApiKey(v0ApiKey, clientId);
 
       const authCode = {
@@ -72,7 +69,7 @@ class V0OAuthProvider {
         codeChallenge,
         codeChallengeMethod,
         scope,
-        encryptedApiKey, // Store encrypted API key
+        encryptedApiKey,
         createdAt: new Date(),
         expiresAt: new Date(Date.now() + CODE_EXPIRES_IN * 1000),
       };
@@ -96,7 +93,6 @@ class V0OAuthProvider {
     try {
       console.log("Exchanging code for token, client:", clientId);
 
-      // Get authorization code from database
       console.log("Querying authorization codes...");
       const result = await db
         .select()
@@ -111,20 +107,17 @@ class V0OAuthProvider {
 
       const authCode = result[0];
 
-      // Validate authorization code
       if (
         authCode.clientId !== clientId ||
         authCode.redirectUri !== redirectUri ||
         authCode.expiresAt < new Date()
       ) {
-        // Delete expired/invalid code
         await db
           .delete(authorizationCodes)
           .where(eq(authorizationCodes.code, code));
         return null;
       }
 
-      // Validate PKCE
       if (
         !this.validatePKCE(
           codeVerifier,
@@ -138,15 +131,13 @@ class V0OAuthProvider {
         return null;
       }
 
-      // Decrypt the API key from the authorization code
       const decryptedApiKey = decryptApiKey(authCode.encryptedApiKey, clientId);
 
-      // Use the encrypted API key as the access token
-      const token = authCode.encryptedApiKey; // The access token IS the encrypted API key
-      const refreshToken = generateAccessToken(); // Generate a separate refresh token
+      const token = authCode.encryptedApiKey;
+      const refreshToken = generateAccessToken();
 
       const accessToken = {
-        token, // Store the encrypted API key as the token
+        token,
         clientId,
         scope: authCode.scope,
         refreshToken,
@@ -160,7 +151,6 @@ class V0OAuthProvider {
       console.log("Inserting access token...");
       await db.insert(accessTokens).values(accessToken);
 
-      // Store decrypted API key in sessionApiKeyStore for backward compatibility
       sessionApiKeyStore.setSessionApiKey(token, decryptedApiKey);
 
       console.log("Cleaning up authorization code...");
@@ -197,7 +187,6 @@ class V0OAuthProvider {
 
       const client = result[0];
 
-      // Check if client is expired
       if (client.expiresAt && client.expiresAt < new Date()) {
         return false;
       }
@@ -266,7 +255,7 @@ class V0OAuthProvider {
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code"],
       code_challenge_methods_supported: ["S256", "plain"],
-      token_endpoint_auth_methods_supported: ["none"], // Public client
+      token_endpoint_auth_methods_supported: ["none"],
       authorization_response_iss_parameter_supported: true,
       require_pushed_authorization_requests: false,
       pushed_authorization_request_endpoint: null,
@@ -293,10 +282,8 @@ class V0OAuthProvider {
 
 export const oauthProvider = new V0OAuthProvider();
 
-// OAuth router
 export const oauthRouter = new Hono();
 
-// Authorization endpoint - presents form for API key input (Step 10 in sequence diagram)
 oauthRouter.get("/authorize", (c) => {
   const query = c.req.query();
   console.log("OAuth authorize request query parameters:", query);
@@ -309,7 +296,7 @@ oauthRouter.get("/authorize", (c) => {
     code_challenge_method,
     scope,
     state,
-    resource, // Required by MCP spec
+    resource,
   } = query;
 
   console.log("Extracted parameters:", {
@@ -339,11 +326,9 @@ oauthRouter.get("/authorize", (c) => {
     );
   }
 
-  // Set default resource if not provided (MCP spec recommends it but some clients might not send it)
   const baseUrl = getBaseUrl(c);
   const resourceParam = resource || `${baseUrl}/mcp`;
 
-  // Return HTML form for API key input
   const html = `
     <!DOCTYPE html>
     <html>
@@ -400,7 +385,6 @@ oauthRouter.get("/authorize", (c) => {
   return c.html(html);
 });
 
-// Handle authorization form submission (Step 11-12 in sequence diagram)
 oauthRouter.post("/authorize", async (c) => {
   const formData = await c.req.formData();
   const clientId = formData.get("client_id") as string;
@@ -410,7 +394,7 @@ oauthRouter.post("/authorize", async (c) => {
     (formData.get("code_challenge_method") as string) || "S256";
   const scope = (formData.get("scope") as string) || "mcp:tools mcp:resources";
   const state = (formData.get("state") as string) || "";
-  const resource = formData.get("resource") as string; // Required by MCP spec
+  const resource = formData.get("resource") as string;
   const v0ApiKey = formData.get("v0_api_key") as string;
 
   if (!v0ApiKey) {
@@ -420,9 +404,6 @@ oauthRouter.post("/authorize", async (c) => {
   if (!resource) {
     return c.text("Resource parameter is required per MCP specification", 400);
   }
-
-  // TODO: Validate the V0 API key by making a test request to V0
-  // For now, we'll accept any non-empty key
 
   const code = await oauthProvider.generateAuthorizationCode(
     clientId,
@@ -436,14 +417,12 @@ oauthRouter.post("/authorize", async (c) => {
   const redirectUrl = new URL(redirectUri);
   redirectUrl.searchParams.set("code", code);
   if (state) redirectUrl.searchParams.set("state", state);
-  // Add iss parameter as recommended by OAuth 2.1
   const baseUrl = getBaseUrl(c);
   redirectUrl.searchParams.set("iss", `${baseUrl}/oauth`);
 
   return c.redirect(redirectUrl.toString());
 });
 
-// Token endpoint
 oauthRouter.post("/token", async (c) => {
   const formData = await c.req.formData();
   const grantType = formData.get("grant_type") as string;
@@ -476,7 +455,6 @@ oauthRouter.post("/token", async (c) => {
   });
 });
 
-// Introspection endpoint
 oauthRouter.post("/introspect", async (c) => {
   const formData = await c.req.formData();
   const token = formData.get("token") as string;
@@ -499,19 +477,16 @@ oauthRouter.post("/introspect", async (c) => {
   });
 });
 
-// Dynamic Client Registration endpoint (RFC 7591)
 oauthRouter.post("/register", async (c) => {
   try {
     console.log("Processing client registration request...");
     const registration = await c.req.json();
     console.log("Registration data:", registration);
 
-    // Generate client credentials
     const clientId = `mcp-client-${randomUUID()}`;
-    const clientSecret = randomUUID(); // Optional for public clients
+    const clientSecret = randomUUID();
     const registrationAccessToken = randomUUID();
 
-    // Validate redirect URIs
     const redirectUris = registration.redirect_uris || [];
     if (!Array.isArray(redirectUris) || redirectUris.length === 0) {
       return c.json(
@@ -523,7 +498,6 @@ oauthRouter.post("/register", async (c) => {
       );
     }
 
-    // Store client registration in database
     const clientRecord = {
       clientId,
       clientSecret,
@@ -533,30 +507,29 @@ oauthRouter.post("/register", async (c) => {
       grantTypes: ["authorization_code"],
       responseTypes: ["code"],
       scope: "mcp:tools mcp:resources",
-      tokenEndpointAuthMethod: "none", // Public client
+      tokenEndpointAuthMethod: "none",
       registrationAccessToken,
       createdAt: new Date(),
-      expiresAt: null, // Never expires
+      expiresAt: null,
     };
 
     console.log("Inserting client registration into database...");
     await db.insert(registeredClients).values(clientRecord);
     console.log("Client registration inserted successfully");
 
-    // Create client registration response
     const baseUrl = `${getBaseUrl(c)}/oauth`;
 
     const response = {
       client_id: clientId,
       client_secret: clientSecret,
       client_id_issued_at: Math.floor(Date.now() / 1000),
-      client_secret_expires_at: 0, // Never expires
+      client_secret_expires_at: 0,
       redirect_uris: redirectUris,
       grant_types: ["authorization_code"],
       response_types: ["code"],
       client_name: registration.client_name || "MCP Client",
       client_uri: registration.client_uri,
-      token_endpoint_auth_method: "none", // Public client
+      token_endpoint_auth_method: "none",
       scope: "mcp:tools mcp:resources",
       registration_client_uri: `${baseUrl}/clients/${clientId}`,
       registration_access_token: registrationAccessToken,
@@ -576,7 +549,6 @@ oauthRouter.post("/register", async (c) => {
   }
 });
 
-// Token revocation endpoint (RFC 7009)
 oauthRouter.post("/revoke", async (c) => {
   try {
     const formData = await c.req.formData();
@@ -589,19 +561,15 @@ oauthRouter.post("/revoke", async (c) => {
       );
     }
 
-    // Remove the access token from the database
     await db.delete(accessTokens).where(eq(accessTokens.token, token));
 
     console.log(
       `Access token revoked and removed: ${token.substring(0, 10)}...`
     );
 
-    // RFC 7009 specifies that revocation endpoint should return 200 even for invalid tokens
     return c.text("", 200);
   } catch (error) {
     console.error("Token revocation error:", error);
     return c.json({ error: "server_error" }, 500);
   }
 });
-
-// Note: Authorization server metadata endpoint is now mounted at root level in main app
