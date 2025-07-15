@@ -9,6 +9,7 @@ import {
   decryptApiKey,
   generateAccessToken,
 } from "../utils/crypto";
+import crypto from "node:crypto";
 
 // OAuth token expiration constants
 const TOKEN_EXPIRES_IN = 432000; // 5 days (5 * 24 * 60 * 60)
@@ -173,7 +174,6 @@ class V0OAuthProvider {
       return verifier === challenge;
     }
     if (method === "S256") {
-      const crypto = require("crypto");
       const hash = crypto
         .createHash("sha256")
         .update(verifier)
