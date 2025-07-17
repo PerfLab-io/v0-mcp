@@ -2,7 +2,13 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle, Copy, ExternalLink } from "lucide-react";
@@ -73,8 +79,13 @@ function AuthSuccessContent() {
             <CheckCircle className="h-4 w-4" />
             <AlertDescription>
               <div className="space-y-2">
-                <p><strong>Status:</strong> Authorized</p>
-                <p><strong>Client:</strong> {redirectUri.split('/')[2] || 'Unknown'}</p>
+                <p>
+                  <strong>Status:</strong> Authorized
+                </p>
+                <p>
+                  <strong>Client:</strong>{" "}
+                  {redirectUri.split("/")[2] || "Unknown"}
+                </p>
                 {autoRedirected && (
                   <p className="text-sm text-green-600 dark:text-green-400">
                     Redirecting to client...
@@ -116,12 +127,16 @@ function AuthSuccessContent() {
               Open in Client
             </Button>
             <p className="text-xs text-muted-foreground text-center">
-              Click above to manually redirect to your client, or copy the authorization code.
+              Click above to manually redirect to your client, or copy the
+              authorization code.
             </p>
           </div>
 
           <div className="text-xs text-muted-foreground text-center">
-            <p>You can now close this window and return to your client application.</p>
+            <p>
+              You can now close this window and return to your client
+              application.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -131,11 +146,13 @@ function AuthSuccessContent() {
 
 export default function AuthSuccessPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
-        <div className="text-center">Loading...</div>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
+          <div className="text-center">Loading...</div>
+        </div>
+      }
+    >
       <AuthSuccessContent />
     </Suspense>
   );

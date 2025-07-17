@@ -8,9 +8,9 @@ export async function GET(request: NextRequest) {
   const host = request.headers.get("host") || "localhost:3000";
   const baseUrl = `${protocol}://${host}/api/mcp`;
   const authServerUrl = `${protocol}://${host}`;
-  
+
   return NextResponse.json(
-    oauthProvider.getProtectedResourceMetadata(baseUrl, authServerUrl)
+    oauthProvider.getProtectedResourceMetadata(baseUrl, authServerUrl),
   );
 }
 

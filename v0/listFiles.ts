@@ -50,7 +50,7 @@ export async function listFiles(inputs: z.infer<typeof listFilesSchema>) {
     if (inputs.language) {
       files = files.filter(
         (file) =>
-          file.file.lang?.toLowerCase() === inputs.language?.toLowerCase()
+          file.file.lang?.toLowerCase() === inputs.language?.toLowerCase(),
       );
     }
 

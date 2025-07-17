@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
           error: "invalid_redirect_uri",
           error_description: "At least one redirect_uri is required",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
         error: "invalid_request",
         error_description: "Invalid client registration request",
       },
-      { status: 400 }
+      { status: 400 },
     );
   }
 }

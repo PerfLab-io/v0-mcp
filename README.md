@@ -18,16 +18,16 @@ npm install
 npm run start
 ```
 
-
 ## Available Tools
 
 - **create_chat**: Create v0.dev chats with streaming responses (calls v0.dev API directly)
-- **get_user_info**: Retrieve user account information 
+- **get_user_info**: Retrieve user account information
 - **create_project**: Create new v0.dev projects
 
 ## Streaming Experience
 
 When using `create_chat`, you'll receive:
+
 1. Immediate acknowledgment that the request started
 2. Real-time streaming updates via SSE as the v0.dev API processes your request
 3. Final completion status with chat ID and URL

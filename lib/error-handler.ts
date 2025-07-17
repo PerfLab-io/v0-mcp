@@ -1,8 +1,10 @@
 export function handleApiKeyError(error: unknown) {
-  if (error instanceof Error && 
-      (error.message.includes("V0_API_KEY") || 
-       error.message.includes("API key") || 
-       error.message.includes("No API key"))) {
+  if (
+    error instanceof Error &&
+    (error.message.includes("V0_API_KEY") ||
+      error.message.includes("API key") ||
+      error.message.includes("No API key"))
+  ) {
     return {
       content: [
         {
@@ -13,7 +15,7 @@ export function handleApiKeyError(error: unknown) {
       isError: true,
     };
   }
-  
+
   return null;
 }
 

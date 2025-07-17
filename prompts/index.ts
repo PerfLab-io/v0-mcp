@@ -99,7 +99,7 @@ export const v0Prompts = [
 // Prompt content generators
 export async function getPromptContent(
   name: string,
-  args: Record<string, any> = {}
+  args: Record<string, any> = {},
 ) {
   switch (name) {
     case "create_v0_chat":
@@ -156,8 +156,8 @@ Call the create_chat tool with these parameters:
       complexity === "simple"
         ? "v0-1.5-sm"
         : complexity === "complex"
-        ? "v0-1.5-lg"
-        : "v0-1.5-md"
+          ? "v0-1.5-lg"
+          : "v0-1.5-md"
     }",
     "thinking": true
   }
@@ -213,27 +213,27 @@ ${
 - Ask for specific styling or functionality changes
 `
     : iterationType === "new_feature"
-    ? `
+      ? `
 - Clearly describe the new feature
 - Explain how it should integrate with existing code
 - Provide user stories or use cases
 - Consider impact on existing functionality
 `
-    : iterationType === "bug_fix"
-    ? `
+      : iterationType === "bug_fix"
+        ? `
 - Describe the specific issue or error
 - Provide steps to reproduce the problem
 - Include any error messages
 - Mention expected vs. actual behavior
 `
-    : iterationType === "styling"
-    ? `
+        : iterationType === "styling"
+          ? `
 - Be specific about design changes
 - Reference color schemes, layouts, spacing
 - Mention responsive behavior
 - Include accessibility considerations
 `
-    : `
+          : `
 - Be clear about your goals
 - Provide specific feedback
 - Reference existing components when relevant
@@ -340,10 +340,10 @@ ${
   action === "list"
     ? "Start by using the find_chats tool to see all your chats."
     : action === "search"
-    ? "Use find_chats with specific filters to find what you need."
-    : action === "favorite"
-    ? "Use favorite_chat to mark important chats."
-    : "Begin with find_chats to see your current chat organization."
+      ? "Use find_chats with specific filters to find what you need."
+      : action === "favorite"
+        ? "Use favorite_chat to mark important chats."
+        : "Begin with find_chats to see your current chat organization."
 }`,
     },
   };

@@ -14,7 +14,12 @@ class SessionFileStore {
     return SessionFileStore.instance;
   }
 
-  async addFilesFromChat(sessionId: string, chatId: string, files: V0File[], messageId?: string): Promise<SessionFile[]> {
+  async addFilesFromChat(
+    sessionId: string,
+    chatId: string,
+    files: V0File[],
+    messageId?: string,
+  ): Promise<SessionFile[]> {
     // Update last chat ID
     await this.setLastChatId(sessionId, chatId);
     const sessionFileList = this.sessionFiles.get(sessionId) || [];
@@ -27,9 +32,8 @@ class SessionFileStore {
       const uri = `v0://session/${sessionId}/files/${fileId}`;
 
       // Check if file already exists in session
-      const existingFile = sessionFileList.find(sf => 
-        sf.file.source === file.source && 
-        sf.file.lang === file.lang
+      const existingFile = sessionFileList.find(
+        (sf) => sf.file.source === file.source && sf.file.lang === file.lang,
       );
 
       if (!existingFile) {
@@ -50,23 +54,23 @@ class SessionFileStore {
     }
 
     this.sessionFiles.set(sessionId, sessionFileList);
-    
+
     // Cache to KV
     await this.cacheSessionData(sessionId);
-    
+
     return addedFiles;
   }
 
   async getSessionFiles(sessionId: string): Promise<SessionFile[]> {
     // Try memory first
     let files = this.sessionFiles.get(sessionId);
-    
+
     if (!files) {
       // Load from KV cache
       await this.loadSessionData(sessionId);
       files = this.sessionFiles.get(sessionId) || [];
     }
-    
+
     return files;
   }
 
@@ -74,23 +78,26 @@ class SessionFileStore {
     return this.fileIndex.get(uri);
   }
 
-  async getChatFiles(sessionId: string, chatId: string): Promise<SessionFile[]> {
+  async getChatFiles(
+    sessionId: string,
+    chatId: string,
+  ): Promise<SessionFile[]> {
     const sessionFiles = await this.getSessionFiles(sessionId);
-    return sessionFiles.filter(file => file.chatId === chatId);
+    return sessionFiles.filter((file) => file.chatId === chatId);
   }
 
   async clearSession(sessionId: string): Promise<void> {
     const sessionFiles = this.sessionFiles.get(sessionId) || [];
-    
+
     // Remove from file index
     for (const file of sessionFiles) {
       this.fileIndex.delete(file.uri);
     }
-    
+
     // Remove session files
     this.sessionFiles.delete(sessionId);
     this.lastChatIds.delete(sessionId);
-    
+
     // Clear KV cache
     await API_KV.delete(`session:${sessionId}:data`);
   }
@@ -114,12 +121,12 @@ class SessionFileStore {
 
   async getLastChatId(sessionId: string): Promise<string | undefined> {
     let lastChatId = this.lastChatIds.get(sessionId);
-    
+
     if (!lastChatId) {
       await this.loadSessionData(sessionId);
       lastChatId = this.lastChatIds.get(sessionId);
     }
-    
+
     return lastChatId;
   }
 
@@ -133,40 +140,42 @@ class SessionFileStore {
       const files = this.sessionFiles.get(sessionId) || [];
       const lastChatId = this.lastChatIds.get(sessionId);
       const stats = await this.getFileStats(sessionId);
-      
+
       const sessionData: SessionData = {
         lastChatId,
         files,
         stats,
         updatedAt: new Date(),
       };
-      
+
       await API_KV.put(`session:${sessionId}:data`, sessionData, {
         expirationTtl: 60 * 60 * 24 * 7, // 7 days TTL
       });
     } catch (error) {
-      console.error('Failed to cache session data:', error);
+      console.error("Failed to cache session data:", error);
     }
   }
 
   private async loadSessionData(sessionId: string): Promise<void> {
     try {
-      const sessionData = await API_KV.get(`session:${sessionId}:data`) as SessionData | null;
-      
+      const sessionData = (await API_KV.get(
+        `session:${sessionId}:data`,
+      )) as SessionData | null;
+
       if (sessionData) {
         this.sessionFiles.set(sessionId, sessionData.files);
-        
+
         if (sessionData.lastChatId) {
           this.lastChatIds.set(sessionId, sessionData.lastChatId);
         }
-        
+
         // Rebuild file index
         for (const file of sessionData.files) {
           this.fileIndex.set(file.uri, file);
         }
       }
     } catch (error) {
-      console.error('Failed to load session data:', error);
+      console.error("Failed to load session data:", error);
     }
   }
 
@@ -175,7 +184,7 @@ class SessionFileStore {
     let hash = 0;
     for (let i = 0; i < content.length; i++) {
       const char = content.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32-bit integer
     }
     return Math.abs(hash).toString(36);

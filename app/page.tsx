@@ -13,21 +13,21 @@ export default async function MCPLandingPage() {
   // Helper function to create dotted patterns
   const createDottedPattern = (color: string) => ({
     backgroundImage: `url("data:image/svg+xml,%3Csvg width='8' height='8' viewBox='0 0 8 8' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='1' height='1' x='0' y='0' fill='${encodeURIComponent(
-      color
+      color,
     )}'/%3E%3Crect width='1' height='1' x='2' y='1' fill='${encodeURIComponent(
-      color
+      color,
     )}'/%3E%3Crect width='1' height='1' x='4' y='2' fill='${encodeURIComponent(
-      color
+      color,
     )}'/%3E%3Crect width='1' height='1' x='6' y='3' fill='${encodeURIComponent(
-      color
+      color,
     )}'/%3E%3Crect width='1' height='1' x='1' y='4' fill='${encodeURIComponent(
-      color
+      color,
     )}'/%3E%3Crect width='1' height='1' x='3' y='5' fill='${encodeURIComponent(
-      color
+      color,
     )}'/%3E%3Crect width='1' height='1' x='5' y='6' fill='${encodeURIComponent(
-      color
+      color,
     )}'/%3E%3Crect width='1' height='1' x='7' y='7' fill='${encodeURIComponent(
-      color
+      color,
     )}'/%3E%3C/svg%3E")`,
   });
 
@@ -101,21 +101,21 @@ export default async function MCPLandingPage() {
                 border: "4px solid transparent",
                 borderRadius: "6px",
                 backgroundImage: `url("data:image/svg+xml,%3Csvg width='8' height='8' viewBox='0 0 8 8' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='1' height='1' x='0' y='0' fill='${encodeURIComponent(
-                  feature.borderColor
+                  feature.borderColor,
                 )}'/%3E%3Crect width='1' height='1' x='2' y='1' fill='${encodeURIComponent(
-                  feature.borderColor
+                  feature.borderColor,
                 )}'/%3E%3Crect width='1' height='1' x='4' y='2' fill='${encodeURIComponent(
-                  feature.borderColor
+                  feature.borderColor,
                 )}'/%3E%3Crect width='1' height='1' x='6' y='3' fill='${encodeURIComponent(
-                  feature.borderColor
+                  feature.borderColor,
                 )}'/%3E%3Crect width='1' height='1' x='1' y='4' fill='${encodeURIComponent(
-                  feature.borderColor
+                  feature.borderColor,
                 )}'/%3E%3Crect width='1' height='1' x='3' y='5' fill='${encodeURIComponent(
-                  feature.borderColor
+                  feature.borderColor,
                 )}'/%3E%3Crect width='1' height='1' x='5' y='6' fill='${encodeURIComponent(
-                  feature.borderColor
+                  feature.borderColor,
                 )}'/%3E%3Crect width='1' height='1' x='7' y='7' fill='${encodeURIComponent(
-                  feature.borderColor
+                  feature.borderColor,
                 )}'/%3E%3C/svg%3E")`,
                 backgroundClip: "border-box",
                 WebkitMask:

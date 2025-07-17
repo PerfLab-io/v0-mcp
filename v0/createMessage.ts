@@ -17,7 +17,7 @@ export const createMessageSchema = z.object({
 });
 
 export async function createMessage(
-  inputs: z.infer<typeof createMessageSchema>
+  inputs: z.infer<typeof createMessageSchema>,
 ) {
   try {
     const client = v0ClientManager.getClient();
@@ -35,7 +35,7 @@ export async function createMessage(
           sessionId,
           inputs.chatId,
           message.files,
-          message.id
+          message.id,
         );
       } else {
         // Still update last chat ID even if no files

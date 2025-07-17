@@ -2,12 +2,16 @@ import type { v0 } from "v0-sdk";
 
 // Extract types from v0-sdk
 export type ChatCreateResponse = Awaited<ReturnType<typeof v0.chats.create>>;
-export type ChatSendMessageResponse = Awaited<ReturnType<typeof v0.chats.sendMessage>>;
+export type ChatSendMessageResponse = Awaited<
+  ReturnType<typeof v0.chats.sendMessage>
+>;
 export type ChatFindResponse = Awaited<ReturnType<typeof v0.chats.find>>;
-export type ChatFavoriteResponse = Awaited<ReturnType<typeof v0.chats.favorite>>;
+export type ChatFavoriteResponse = Awaited<
+  ReturnType<typeof v0.chats.favorite>
+>;
 
 // Extract file types from the responses
-export type V0File = NonNullable<ChatCreateResponse['files']>[number];
+export type V0File = NonNullable<ChatCreateResponse["files"]>[number];
 
 // Session storage types
 export interface SessionFile {

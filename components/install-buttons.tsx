@@ -39,7 +39,7 @@ export default function InstallButtons({
       version: "1.0.0",
     };
     const mcpUrl_vscode = `vscode:mcp/install?${encodeURIComponent(
-      JSON.stringify(obj)
+      JSON.stringify(obj),
     )}`;
     window.open(mcpUrl_vscode, "_blank");
   };
@@ -99,7 +99,7 @@ export default function InstallButtons({
               size="sm"
               onClick={() =>
                 copyToClipboard(
-                  `claude mcp add --transport http v0-mcp ${mcpUrl}`
+                  `claude mcp add --transport http v0-mcp ${mcpUrl}`,
                 )
               }
               className="h-6 w-6 p-0 text-gray-400 hover:text-white"

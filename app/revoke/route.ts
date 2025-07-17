@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     if (!token) {
       return NextResponse.json(
         { error: "invalid_request", error_description: "Token is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 

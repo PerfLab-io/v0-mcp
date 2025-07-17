@@ -10,7 +10,7 @@ export const createProjectSchema = z.object({
       z.object({
         key: z.string().describe("Environment variable key"),
         value: z.string().describe("Environment variable value"),
-      })
+      }),
     )
     .optional()
     .describe("Environment variables"),
@@ -18,7 +18,7 @@ export const createProjectSchema = z.object({
 });
 
 export async function createProject(
-  inputs: z.infer<typeof createProjectSchema>
+  inputs: z.infer<typeof createProjectSchema>,
 ) {
   try {
     const client = v0ClientManager.getClient();

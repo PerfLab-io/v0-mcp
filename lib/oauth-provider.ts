@@ -26,7 +26,7 @@ export class V0OAuthProvider {
     codeChallenge: string,
     codeChallengeMethod: string,
     scope: string,
-    v0ApiKey: string
+    v0ApiKey: string,
   ): Promise<string> {
     const code = randomUUID();
 
@@ -78,7 +78,7 @@ export class V0OAuthProvider {
     code: string,
     clientId: string,
     redirectUri: string,
-    codeVerifier: string
+    codeVerifier: string,
   ): Promise<AccessToken | null> {
     console.log("Exchange code for token:", {
       code: code.substring(0, 10) + "...",
@@ -127,7 +127,7 @@ export class V0OAuthProvider {
     const pkceValid = this.validatePKCE(
       codeVerifier,
       oauthState.codeChallenge,
-      oauthState.codeChallengeMethod
+      oauthState.codeChallengeMethod,
     );
 
     if (!pkceValid) {
@@ -146,7 +146,7 @@ export class V0OAuthProvider {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + TOKEN_EXPIRES_IN * 1000);
     const refreshExpiresAt = new Date(
-      now.getTime() + REFRESH_TOKEN_EXPIRES_IN * 1000
+      now.getTime() + REFRESH_TOKEN_EXPIRES_IN * 1000,
     );
 
     // Store access token in KV
@@ -263,7 +263,7 @@ export class V0OAuthProvider {
   private validatePKCE(
     verifier: string,
     challenge: string,
-    method: string
+    method: string,
   ): boolean {
     console.log("PKCE validation:", {
       verifier: verifier.substring(0, 10) + "...",
