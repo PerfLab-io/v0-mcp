@@ -1,0 +1,154 @@
+import { Redis } from "@upstash/redis";
+import { serverEnv } from "./env.server";
+
+const redis = new Redis({
+  url: serverEnv.KV_REST_API_URL,
+  token: serverEnv.KV_REST_API_TOKEN,
+});
+
+// KV Storage interface matching the v0-mcp-cfw patterns
+export interface KVStorage {
+  get<T = any>(key: string): Promise<T | null>;
+  put(
+    key: string,
+    value: any,
+    options?: { expirationTtl?: number }
+  ): Promise<void>;
+  delete(key: string): Promise<void>;
+  list(options?: { prefix?: string }): Promise<string[]>;
+}
+
+// OAuth KV - stores OAuth provider state and client approvals
+export class OAuthKV implements KVStorage {
+  private prefix = "oauth:";
+
+  async get<T = any>(key: string): Promise<T | null> {
+    const result = await redis.get(`${this.prefix}${key}`);
+    return result as T | null;
+  }
+
+  async put(
+    key: string,
+    value: any,
+    options?: { expirationTtl?: number }
+  ): Promise<void> {
+    const fullKey = `${this.prefix}${key}`;
+    if (options?.expirationTtl) {
+      await redis.setex(fullKey, options.expirationTtl, JSON.stringify(value));
+    } else {
+      await redis.set(fullKey, JSON.stringify(value));
+    }
+  }
+
+  async delete(key: string): Promise<void> {
+    await redis.del(`${this.prefix}${key}`);
+  }
+
+  async list(options?: { prefix?: string }): Promise<string[]> {
+    const searchPrefix = `${this.prefix}${options?.prefix || ""}`;
+    const keys = await redis.keys(`${searchPrefix}*`);
+    return keys.map((key) => key.replace(this.prefix, ""));
+  }
+}
+
+// API KV - stores encrypted API keys with user metadata
+export class ApiKV implements KVStorage {
+  private prefix = "api:";
+
+  async get<T = any>(key: string): Promise<T | null> {
+    const result = await redis.get(`${this.prefix}${key}`);
+    return result as T | null;
+  }
+
+  async put(
+    key: string,
+    value: any,
+    options?: { expirationTtl?: number }
+  ): Promise<void> {
+    const fullKey = `${this.prefix}${key}`;
+    if (options?.expirationTtl) {
+      await redis.setex(fullKey, options.expirationTtl, JSON.stringify(value));
+    } else {
+      await redis.set(fullKey, JSON.stringify(value));
+    }
+  }
+
+  async delete(key: string): Promise<void> {
+    await redis.del(`${this.prefix}${key}`);
+  }
+
+  async list(options?: { prefix?: string }): Promise<string[]> {
+    const searchPrefix = `${this.prefix}${options?.prefix || ""}`;
+    const keys = await redis.keys(`${searchPrefix}*`);
+    return keys.map((key) => key.replace(this.prefix, ""));
+  }
+}
+
+// Session KV - stores session data
+export class SessionKV implements KVStorage {
+  private prefix = "session:";
+
+  async get<T = any>(key: string): Promise<T | null> {
+    const result = await redis.get(`${this.prefix}${key}`);
+    return result as T | null;
+  }
+
+  async put(
+    key: string,
+    value: any,
+    options?: { expirationTtl?: number }
+  ): Promise<void> {
+    const fullKey = `${this.prefix}${key}`;
+    if (options?.expirationTtl) {
+      await redis.setex(fullKey, options.expirationTtl, JSON.stringify(value));
+    } else {
+      await redis.set(fullKey, JSON.stringify(value));
+    }
+  }
+
+  async delete(key: string): Promise<void> {
+    await redis.del(`${this.prefix}${key}`);
+  }
+
+  async list(options?: { prefix?: string }): Promise<string[]> {
+    const searchPrefix = `${this.prefix}${options?.prefix || ""}`;
+    const keys = await redis.keys(`${searchPrefix}*`);
+    return keys.map((key) => key.replace(this.prefix, ""));
+  }
+}
+
+// Export singleton instances
+export const OAUTH_KV = new OAuthKV();
+export const API_KV = new ApiKV();
+export const SESSION_KV = new SessionKV();
+
+// Utility types for KV data structures
+export interface ApiKeyData {
+  userId: string;
+  encryptedApiKey: string;
+  isActive: boolean;
+  createdAt: string;
+  lastUsedAt: string;
+}
+
+export interface SessionData {
+  id: string;
+  clientId: string;
+  clientName?: string;
+  clientVersion?: string;
+  clientType: string;
+  createdAt: string;
+  lastActivity: string;
+}
+
+export interface OAuthState {
+  clientId: string;
+  redirectUri: string;
+  codeChallenge: string;
+  codeChallengeMethod: string;
+  scope: string;
+  state?: string;
+  resource?: string;
+  createdAt: string;
+  expiresAt: string;
+}

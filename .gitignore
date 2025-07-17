@@ -37,7 +37,7 @@ out/
 
 # production
 build
-
+dist
 # env files
 .env*
 
