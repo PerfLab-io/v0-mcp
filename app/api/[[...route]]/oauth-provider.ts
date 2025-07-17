@@ -309,7 +309,7 @@ oauthRouter.get("/authorize", (c) => {
             
             <div class="form-group">
                 <label for="v0_api_key">V0 API Key:</label>
-                <input type="password" id="v0_api_key" name="v0_api_key" required placeholder="Enter your V0 API key">
+                <input type="password" autocomplete="off" id="v0_api_key" name="v0_api_key" required placeholder="Enter your V0 API key">
             </div>
             
             <button type="submit">Authorize Access</button>

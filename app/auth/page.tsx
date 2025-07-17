@@ -7,9 +7,23 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { ExternalLink, Shield, Key } from "lucide-react";
 
 const formSchema = z.object({
@@ -24,7 +38,8 @@ function AuthContent() {
   const clientId = searchParams.get("client_id") || "";
   const redirectUri = searchParams.get("redirect_uri") || "";
   const codeChallenge = searchParams.get("code_challenge") || "";
-  const codeChallengeMethod = searchParams.get("code_challenge_method") || "S256";
+  const codeChallengeMethod =
+    searchParams.get("code_challenge_method") || "S256";
   const scope = searchParams.get("scope") || "mcp:tools mcp:resources";
   const state = searchParams.get("state") || "";
   const resource = searchParams.get("resource") || "";
@@ -52,8 +67,10 @@ function AuthContent() {
       formData.append("v0_api_key", values.v0_api_key);
 
       // Check if this is a custom protocol redirect
-      const isCustomProtocol = !redirectUri.startsWith("http://") && !redirectUri.startsWith("https://");
-      
+      const isCustomProtocol =
+        !redirectUri.startsWith("http://") &&
+        !redirectUri.startsWith("https://");
+
       if (isCustomProtocol) {
         // For custom protocols, use fetch to handle the redirect to success page
         const response = await fetch("/authorize", {
@@ -69,7 +86,7 @@ function AuthContent() {
             window.location.href = response.url;
           }
         } else {
-          const errorData = await response.json() as { error?: string };
+          const errorData = (await response.json()) as { error?: string };
           setError(errorData.error || "Authorization failed");
           setIsSubmitting(false);
         }
@@ -79,7 +96,7 @@ function AuthContent() {
         form.method = "POST";
         form.action = "/authorize";
         form.style.display = "none";
-        
+
         // Add all form data as hidden inputs
         for (const [key, value] of formData.entries()) {
           const input = document.createElement("input");
@@ -88,7 +105,7 @@ function AuthContent() {
           input.value = value as string;
           form.appendChild(input);
         }
-        
+
         document.body.appendChild(form);
         form.submit();
       }
@@ -126,10 +143,14 @@ function AuthContent() {
             <Key className="h-4 w-4" />
             <AlertDescription>
               <div className="space-y-2">
-                <p><strong>Application:</strong> {clientId}</p>
-                <p><strong>Requested Scopes:</strong> {scope}</p>
+                <p>
+                  <strong>Application:</strong> {clientId}
+                </p>
+                <p>
+                  <strong>Requested Scopes:</strong> {scope}
+                </p>
                 <p className="text-sm text-muted-foreground">
-                  This application is requesting access to your V0 account. 
+                  This application is requesting access to your V0 account.
                   Please provide your V0 API key to authorize access.
                 </p>
               </div>
@@ -170,6 +191,7 @@ function AuthContent() {
                     <FormControl>
                       <Input
                         type="password"
+                        autoComplete="off"
                         placeholder="Enter your V0 API key"
                         {...field}
                       />
@@ -203,7 +225,10 @@ function AuthContent() {
           </Form>
 
           <div className="text-xs text-muted-foreground text-center space-y-1">
-            <p>By authorizing, you agree to allow this application to access your V0 account.</p>
+            <p>
+              By authorizing, you agree to allow this application to access your
+              V0 account.
+            </p>
             <p>You can revoke this access at any time from your V0 settings.</p>
           </div>
         </CardContent>
@@ -214,11 +239,13 @@ function AuthContent() {
 
 export default function AuthPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
-        <div className="text-center">Loading...</div>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
+          <div className="text-center">Loading...</div>
+        </div>
+      }
+    >
       <AuthContent />
     </Suspense>
   );

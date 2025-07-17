@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { API_KV, SESSION_KV } from "@/lib/kv-storage";
+import { API_KV } from "@/lib/kv-storage";
 import { decryptApiKey } from "@/lib/crypto";
 import { sessionApiKeyStore } from "@/v0/client";
 import {
@@ -11,10 +11,6 @@ import {
   favoriteChat,
   listFiles,
 } from "@/v0/index";
-import { sessionFileStore } from "@/resources/sessionFileStore";
-import { v0Prompts, getPromptContent } from "@/prompts/index";
-import { getMimeType } from "@/lib/utils";
-import { randomUUID } from "crypto";
 
 // Simple MCP server implementation
 export async function POST(request: NextRequest) {
@@ -30,14 +26,15 @@ export async function POST(request: NextRequest) {
         {
           status: 401,
           headers: {
-            "WWW-Authenticate": 'Bearer error="invalid_token", error_description="No authorization provided", resource_metadata="http://localhost:3000/api/mcp/.well-known/oauth-protected-resource"',
+            "WWW-Authenticate":
+              'Bearer error="invalid_token", error_description="No authorization provided", resource_metadata="http://localhost:3000/api/mcp/.well-known/oauth-protected-resource"',
           },
         }
       );
     }
 
     const token = authHeader.substring(7);
-    
+
     // Validate token
     const tokenData = await API_KV.get(`access_token:${token}`);
     if (!tokenData) {
@@ -62,13 +59,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Decrypt API key
-    const decryptedApiKey = decryptApiKey(tokenData.encryptedApiKey, tokenData.clientId);
+    const decryptedApiKey = decryptApiKey(
+      tokenData.encryptedApiKey,
+      tokenData.clientId
+    );
     sessionApiKeyStore.setSessionApiKey(token, decryptedApiKey);
     sessionApiKeyStore.setCurrentSession(token);
 
     // Parse MCP request
     const body = await request.json();
-    const { method, params, id } = body as { method: string; params?: any; id?: number };
+    const { method, params, id } = body as {
+      method: string;
+      params?: any;
+      id?: number;
+    };
 
     console.log("MCP Request:", { method, params, id });
 
@@ -194,7 +198,8 @@ export async function POST(request: NextRequest) {
               },
               {
                 name: "favorite_chat",
-                description: "Mark a v0 chat as favorite or remove from favorites",
+                description:
+                  "Mark a v0 chat as favorite or remove from favorites",
                 inputSchema: {
                   type: "object",
                   properties: {
@@ -204,7 +209,8 @@ export async function POST(request: NextRequest) {
                     },
                     isFavorite: {
                       type: "boolean",
-                      description: "Whether to favorite (true) or unfavorite (false) the chat",
+                      description:
+                        "Whether to favorite (true) or unfavorite (false) the chat",
                     },
                   },
                   required: ["chatId", "isFavorite"],
@@ -212,7 +218,8 @@ export async function POST(request: NextRequest) {
               },
               {
                 name: "list_files",
-                description: "List all files generated in the current session from V0 chats and messages",
+                description:
+                  "List all files generated in the current session from V0 chats and messages",
                 inputSchema: {
                   type: "object",
                   properties: {
@@ -241,7 +248,6 @@ export async function POST(request: NextRequest) {
 
         try {
           let result;
-          const sessionId = randomUUID(); // Generate session ID for compatibility
 
           switch (toolName) {
             case "create_chat":
@@ -273,7 +279,9 @@ export async function POST(request: NextRequest) {
             jsonrpc: "2.0",
             id,
             result: {
-              content: [{ type: "text", text: JSON.stringify(result.result, null, 2) }],
+              content: [
+                { type: "text", text: JSON.stringify(result.result, null, 2) },
+              ],
             },
           });
         } catch (error: any) {
@@ -342,19 +350,23 @@ export async function POST(request: NextRequest) {
                 {
                   uri,
                   mimeType: "application/json",
-                  text: JSON.stringify({
-                    userId: "example-user",
-                    settings: {
-                      theme: "dark",
-                      language: "en",
+                  text: JSON.stringify(
+                    {
+                      userId: "example-user",
+                      settings: {
+                        theme: "dark",
+                        language: "en",
+                      },
                     },
-                  }, null, 2),
+                    null,
+                    2
+                  ),
                 },
               ],
             },
           });
         }
-        
+
         return NextResponse.json({
           jsonrpc: "2.0",
           id,
