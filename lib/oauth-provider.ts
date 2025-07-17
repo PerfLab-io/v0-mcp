@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
-import { API_KV, OAUTH_KV, SESSION_KV, ApiKeyData, OAuthState } from "@/lib/kv-storage";
-import { encryptApiKey, decryptApiKey, generateAccessToken } from "@/lib/crypto";
+import { API_KV, OAUTH_KV, ApiKeyData, OAuthState } from "@/lib/kv-storage";
+import { encryptApiKey, generateAccessToken } from "@/lib/crypto";
 
 // OAuth token expiration constants
 const TOKEN_EXPIRES_IN = 432000; // 5 days (5 * 24 * 60 * 60)
@@ -29,7 +29,7 @@ export class V0OAuthProvider {
     v0ApiKey: string
   ): Promise<string> {
     const code = randomUUID();
-    
+
     console.log("Generating authorization code:", {
       code: code.substring(0, 10) + "...",
       clientId,
@@ -37,12 +37,12 @@ export class V0OAuthProvider {
       codeChallenge: codeChallenge.substring(0, 10) + "...",
       codeChallengeMethod,
       scope,
-      challengeLength: codeChallenge.length
+      challengeLength: codeChallenge.length,
     });
-    
+
     // Encrypt the API key using the client_id
     const encryptedApiKey = encryptApiKey(v0ApiKey, clientId);
-    
+
     // Store OAuth state in KV
     const oauthState: OAuthState = {
       clientId,
@@ -53,11 +53,11 @@ export class V0OAuthProvider {
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + CODE_EXPIRES_IN * 1000).toISOString(),
     };
-    
+
     await OAUTH_KV.put(`auth_code:${code}`, oauthState, {
       expirationTtl: CODE_EXPIRES_IN,
     });
-    
+
     // Store encrypted API key separately
     const apiKeyData: ApiKeyData = {
       userId: clientId, // Using clientId as userId for simplicity
@@ -66,11 +66,11 @@ export class V0OAuthProvider {
       createdAt: new Date().toISOString(),
       lastUsedAt: new Date().toISOString(),
     };
-    
+
     await API_KV.put(`auth_code_key:${code}`, apiKeyData, {
       expirationTtl: CODE_EXPIRES_IN,
     });
-    
+
     return code;
   }
 
@@ -80,26 +80,30 @@ export class V0OAuthProvider {
     redirectUri: string,
     codeVerifier: string
   ): Promise<AccessToken | null> {
-    console.log("Exchange code for token:", { code: code.substring(0, 10) + "...", clientId, redirectUri });
-    
+    console.log("Exchange code for token:", {
+      code: code.substring(0, 10) + "...",
+      clientId,
+      redirectUri,
+    });
+
     // Get OAuth state from KV
     const oauthState = await OAUTH_KV.get<OAuthState>(`auth_code:${code}`);
     const apiKeyData = await API_KV.get<ApiKeyData>(`auth_code_key:${code}`);
-    
+
     if (!oauthState || !apiKeyData) {
       console.log("OAuth state or API key data not found");
       return null;
     }
-    
-    console.log("OAuth state:", { 
+
+    console.log("OAuth state:", {
       clientId: oauthState.clientId,
       redirectUri: oauthState.redirectUri,
       expiresAt: oauthState.expiresAt,
       codeChallenge: oauthState.codeChallenge.substring(0, 10) + "...",
       fullCodeChallenge: oauthState.codeChallenge,
-      codeChallengeMethod: oauthState.codeChallengeMethod
+      codeChallengeMethod: oauthState.codeChallengeMethod,
     });
-    
+
     // Validate authorization code
     if (
       oauthState.clientId !== clientId ||
@@ -111,21 +115,21 @@ export class V0OAuthProvider {
         redirectUriMatch: oauthState.redirectUri === redirectUri,
         notExpired: new Date(oauthState.expiresAt) >= new Date(),
         expiresAt: oauthState.expiresAt,
-        now: new Date().toISOString()
+        now: new Date().toISOString(),
       });
       // Clean up expired/invalid code
       await OAUTH_KV.delete(`auth_code:${code}`);
       await API_KV.delete(`auth_code_key:${code}`);
       return null;
     }
-    
+
     // Validate PKCE
     const pkceValid = this.validatePKCE(
       codeVerifier,
       oauthState.codeChallenge,
       oauthState.codeChallengeMethod
     );
-    
+
     if (!pkceValid) {
       console.log("PKCE validation failed - this might be a client issue");
       console.log("TEMPORARY: Allowing invalid PKCE for testing");
@@ -134,15 +138,17 @@ export class V0OAuthProvider {
       // await API_KV.delete(`auth_code_key:${code}`);
       // return null;
     }
-    
+
     // Use the encrypted API key as the access token
     const token = apiKeyData.encryptedApiKey;
     const refreshToken = generateAccessToken();
-    
+
     const now = new Date();
     const expiresAt = new Date(now.getTime() + TOKEN_EXPIRES_IN * 1000);
-    const refreshExpiresAt = new Date(now.getTime() + REFRESH_TOKEN_EXPIRES_IN * 1000);
-    
+    const refreshExpiresAt = new Date(
+      now.getTime() + REFRESH_TOKEN_EXPIRES_IN * 1000
+    );
+
     // Store access token in KV
     const accessTokenData = {
       token,
@@ -155,15 +161,15 @@ export class V0OAuthProvider {
       expiresAt: expiresAt.toISOString(),
       refreshExpiresAt: refreshExpiresAt.toISOString(),
     };
-    
+
     await API_KV.put(`access_token:${token}`, accessTokenData, {
       expirationTtl: TOKEN_EXPIRES_IN,
     });
-    
+
     // Clean up authorization code
     await OAUTH_KV.delete(`auth_code:${code}`);
     await API_KV.delete(`auth_code_key:${code}`);
-    
+
     return {
       token,
       clientId,
@@ -181,12 +187,12 @@ export class V0OAuthProvider {
     if (!tokenData) {
       return null;
     }
-    
+
     // Check if token is expired
     if (new Date(tokenData.expiresAt) < new Date()) {
       return null;
     }
-    
+
     return {
       token: tokenData.token,
       clientId: tokenData.clientId,
@@ -206,7 +212,7 @@ export class V0OAuthProvider {
   async refreshToken(refreshToken: string): Promise<AccessToken | null> {
     // Find access token by refresh token
     const keys = await API_KV.list({ prefix: "access_token:" });
-    
+
     for (const key of keys) {
       const tokenData = await API_KV.get(key);
       if (tokenData?.refreshToken === refreshToken) {
@@ -215,13 +221,13 @@ export class V0OAuthProvider {
           await API_KV.delete(key);
           return null;
         }
-        
+
         // Generate new access token
         const newToken = generateAccessToken();
         const newRefreshToken = generateAccessToken();
         const now = new Date();
         const expiresAt = new Date(now.getTime() + TOKEN_EXPIRES_IN * 1000);
-        
+
         const newTokenData = {
           ...tokenData,
           token: newToken,
@@ -229,15 +235,15 @@ export class V0OAuthProvider {
           createdAt: now.toISOString(),
           expiresAt: expiresAt.toISOString(),
         };
-        
+
         // Store new token
         await API_KV.put(`access_token:${newToken}`, newTokenData, {
           expirationTtl: TOKEN_EXPIRES_IN,
         });
-        
+
         // Remove old token
         await API_KV.delete(key);
-        
+
         return {
           token: newToken,
           clientId: tokenData.clientId,
@@ -250,7 +256,7 @@ export class V0OAuthProvider {
         };
       }
     }
-    
+
     return null;
   }
 
@@ -266,9 +272,9 @@ export class V0OAuthProvider {
       fullChallenge: challenge,
       method,
       verifierLength: verifier.length,
-      challengeLength: challenge.length
+      challengeLength: challenge.length,
     });
-    
+
     if (method === "plain") {
       const result = verifier === challenge;
       console.log("PKCE plain result:", result);
@@ -285,7 +291,7 @@ export class V0OAuthProvider {
         result,
         computedHash: hash.substring(0, 10) + "...",
         expectedChallenge: challenge.substring(0, 10) + "...",
-        match: hash === challenge
+        match: hash === challenge,
       });
       return result;
     }
@@ -295,8 +301,8 @@ export class V0OAuthProvider {
 
   getAuthorizationServerMetadata(baseUrl: string) {
     // Extract the base URL without /api/oauth suffix
-    const rootUrl = baseUrl.replace('/api/oauth', '');
-    
+    const rootUrl = baseUrl.replace("/api/oauth", "");
+
     return {
       issuer: baseUrl,
       authorization_endpoint: `${rootUrl}/authorize`,

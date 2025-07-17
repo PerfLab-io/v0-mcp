@@ -1,1 +1,0 @@
-ALTER TABLE "access_tokens" ADD COLUMN "id" serial PRIMARY KEY NOT NULL;

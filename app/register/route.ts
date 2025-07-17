@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { V0OAuthProvider } from "@/lib/oauth-provider";
-
-const oauthProvider = new V0OAuthProvider();
 
 export async function POST(request: NextRequest) {
   try {
-    const registration = await request.json() as {
+    const registration = (await request.json()) as {
       client_name?: string;
       client_uri?: string;
       redirect_uris?: string[];

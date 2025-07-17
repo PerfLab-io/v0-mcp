@@ -1,1 +1,0 @@
-ALTER TABLE "sessions" RENAME COLUMN "api_key_hash" TO "encrypted_api_key";
