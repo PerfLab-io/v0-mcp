@@ -90,9 +90,11 @@ export default function MCPLandingPage() {
   ];
 
   const handleCursorInstall = () => {
+    const protocol = window.location.protocol;
+    const host = window.location.host;
     // For Cursor, we'll use the deeplink format with base64 encoded config
     const config = {
-      url: "http://localhost:3000/mcp",
+      url: `${protocol}://${host}/mcp`,
       description: "v0.dev MCP Server",
     };
 
@@ -103,11 +105,13 @@ export default function MCPLandingPage() {
   };
 
   const handleVSCodeInstall = () => {
+    const protocol = window.location.protocol;
+    const host = window.location.host;
     // For VSCode, we'll use the MCP URL handler with HTTP transport
     const obj = {
       label: "v0-mcp",
       type: "http",
-      uri: "http://localhost:3001/mcp",
+      uri: `${protocol}://${host}/mcp`,
       headers: {
         "Content-Type": "application/json",
       },

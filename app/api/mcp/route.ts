@@ -13,11 +13,15 @@ import {
 } from "@/v0/index";
 import { sessionFileStore } from "@/resources/sessionFileStore";
 import { getMimeType } from "@/lib/utils";
+import { v0Prompts, getPromptContent } from "@/prompts/index";
 
 // Simple MCP server implementation
 export async function POST(request: NextRequest) {
   try {
-    // Check authorization
+    const protocol = request.headers.get("x-forwarded-proto") || "https";
+    const host = request.headers.get("host") || "localhost:3000";
+    const baseUrl = `${protocol}://${host}/api/mcp`;
+
     const authHeader = request.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return NextResponse.json(
@@ -28,8 +32,7 @@ export async function POST(request: NextRequest) {
         {
           status: 401,
           headers: {
-            "WWW-Authenticate":
-              'Bearer error="invalid_token", error_description="No authorization provided", resource_metadata="http://localhost:3000/api/mcp/.well-known/oauth-protected-resource"',
+            "WWW-Authenticate": `Bearer error="invalid_token", error_description="No authorization provided", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`,
           },
         }
       );
@@ -303,28 +306,57 @@ export async function POST(request: NextRequest) {
           jsonrpc: "2.0",
           id,
           result: {
-            prompts: [
-              {
-                name: "v0_prompt",
-                description: "Get a pre-configured prompt for v0 development",
-                arguments: [
-                  {
-                    name: "type",
-                    description: "Type of prompt to get",
-                    required: false,
-                  },
-                ],
-              },
-            ],
+            prompts: v0Prompts.map(prompt => ({
+              name: prompt.name,
+              description: prompt.description,
+              arguments: prompt.arguments || [],
+            })),
           },
         });
+
+      case "prompts/get":
+        try {
+          const promptName = params?.name;
+          const promptArgs = params?.arguments || {};
+
+          if (!promptName) {
+            return NextResponse.json({
+              jsonrpc: "2.0",
+              id,
+              error: {
+                code: -32602,
+                message: "Missing prompt name",
+              },
+            });
+          }
+
+          const promptContent = await getPromptContent(promptName, promptArgs);
+          
+          return NextResponse.json({
+            jsonrpc: "2.0",
+            id,
+            result: {
+              description: `Generated prompt for ${promptName}`,
+              messages: [promptContent],
+            },
+          });
+        } catch (error: any) {
+          return NextResponse.json({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: -32603,
+              message: error.message || "Failed to generate prompt",
+            },
+          });
+        }
 
       case "resources/list":
         try {
           const token = authHeader.substring(7);
           const sessionFiles = await sessionFileStore.getSessionFiles(token);
           const lastChatId = await sessionFileStore.getLastChatId(token);
-          
+
           const resources = [
             {
               uri: "v0://user/config",
@@ -339,7 +371,7 @@ export async function POST(request: NextRequest) {
               mimeType: "application/json",
             },
           ];
-          
+
           // Add last chat resources if available
           if (lastChatId) {
             resources.push({
@@ -349,12 +381,13 @@ export async function POST(request: NextRequest) {
               mimeType: "application/json",
             });
           }
-          
+
           // Add individual file resources
           for (const sessionFile of sessionFiles) {
-            const filename = sessionFile.file.meta?.filename || 
+            const filename =
+              sessionFile.file.meta?.filename ||
               `${sessionFile.file.lang}_file_${sessionFile.id.slice(-8)}`;
-            
+
             resources.push({
               uri: sessionFile.uri,
               name: filename,
@@ -362,7 +395,7 @@ export async function POST(request: NextRequest) {
               mimeType: getMimeType(sessionFile.file.lang),
             });
           }
-          
+
           return NextResponse.json({
             jsonrpc: "2.0",
             id,
@@ -384,7 +417,7 @@ export async function POST(request: NextRequest) {
         try {
           const uri = params?.uri;
           const token = authHeader.substring(7);
-          
+
           if (uri === "v0://user/config") {
             const userInfo = await getUserInfo();
             return NextResponse.json({
@@ -401,7 +434,7 @@ export async function POST(request: NextRequest) {
               },
             });
           }
-          
+
           if (uri === "v0://session/stats") {
             const stats = await sessionFileStore.getFileStats(token);
             return NextResponse.json({
@@ -418,21 +451,26 @@ export async function POST(request: NextRequest) {
               },
             });
           }
-          
+
           // Handle chat files
           if (uri?.startsWith("v0://chats/")) {
             const chatId = uri.split("/").pop();
             if (chatId) {
-              const chatFiles = await sessionFileStore.getChatFiles(token, chatId);
-              const fileList = chatFiles.map(file => ({
+              const chatFiles = await sessionFileStore.getChatFiles(
+                token,
+                chatId
+              );
+              const fileList = chatFiles.map((file) => ({
                 id: file.id,
-                filename: file.file.meta?.filename || `${file.file.lang}_file_${file.id.slice(-8)}`,
+                filename:
+                  file.file.meta?.filename ||
+                  `${file.file.lang}_file_${file.id.slice(-8)}`,
                 language: file.file.lang,
                 uri: file.uri,
                 createdAt: file.createdAt,
                 messageId: file.messageId,
               }));
-              
+
               return NextResponse.json({
                 jsonrpc: "2.0",
                 id,
@@ -441,14 +479,18 @@ export async function POST(request: NextRequest) {
                     {
                       uri,
                       mimeType: "application/json",
-                      text: JSON.stringify({ chatId, files: fileList }, null, 2),
+                      text: JSON.stringify(
+                        { chatId, files: fileList },
+                        null,
+                        2
+                      ),
                     },
                   ],
                 },
               });
             }
           }
-          
+
           // Handle individual file content
           const sessionFile = sessionFileStore.getFileByUri(uri);
           if (sessionFile) {
