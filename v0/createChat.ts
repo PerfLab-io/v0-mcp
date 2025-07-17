@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { v0Client } from "./client";
+import { v0ClientManager } from "./client";
 import { handleApiKeyError } from "@/app/api/[[...route]]/error-handler";
 
 export const createChatSchema = z.object({
@@ -25,7 +25,8 @@ export const createChatSchema = z.object({
 
 export async function createChat(inputs: z.infer<typeof createChatSchema>) {
   try {
-    const chat = await v0Client.chats.create(inputs);
+    const client = v0ClientManager.getClient();
+    const chat = await client.chats.create(inputs);
 
     const fileInfo =
       chat.files && chat.files.length > 0

@@ -1,14 +1,15 @@
 import { z } from "zod";
-import { v0Client } from "./client";
+import { v0ClientManager } from "./client";
 
 export const getUserInfoSchema = z.object({});
 
 export async function getUserInfo() {
   try {
+    const client = v0ClientManager.getClient();
     const [user, plan, scopes] = await Promise.all([
-      v0Client.user.get(),
-      v0Client.user.getPlan().catch(() => null), // Plan might not be available
-      v0Client.user.getScopes().catch(() => null), // Scopes might not be available
+      client.user.get(),
+      client.user.getPlan().catch(() => null), // Plan might not be available
+      client.user.getScopes().catch(() => null), // Scopes might not be available
     ]);
 
     const userInfo = {

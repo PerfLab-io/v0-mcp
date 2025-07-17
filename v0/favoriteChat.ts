@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { v0Client } from "./client";
+import { v0ClientManager } from "./client";
 import { handleApiKeyError } from "@/app/api/[[...route]]/error-handler";
 
 export const favoriteChatSchema = z.object({
@@ -11,7 +11,8 @@ export const favoriteChatSchema = z.object({
 
 export async function favoriteChat(inputs: z.infer<typeof favoriteChatSchema>) {
   try {
-    const result = await v0Client.chats.favorite({
+    const client = v0ClientManager.getClient();
+    const result = await client.chats.favorite({
       chatId: inputs.chatId,
       isFavorite: inputs.isFavorite,
     });

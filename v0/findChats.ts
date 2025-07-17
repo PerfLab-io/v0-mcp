@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { v0Client } from "./client";
+import { v0ClientManager } from "./client";
 import { handleApiKeyError } from "@/app/api/[[...route]]/error-handler";
 
 export const findChatsSchema = z.object({
@@ -16,7 +16,8 @@ export const findChatsSchema = z.object({
 
 export async function findChats(inputs: z.infer<typeof findChatsSchema>) {
   try {
-    const chats = await v0Client.chats.find({
+    const client = v0ClientManager.getClient();
+    const chats = await client.chats.find({
       limit: inputs.limit,
       offset: inputs.offset,
       isFavorite: inputs.isFavorite,

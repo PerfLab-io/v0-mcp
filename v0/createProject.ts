@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { v0Client } from "./client";
+import { v0ClientManager } from "./client";
 
 export const createProjectSchema = z.object({
   name: z.string().describe("The project name"),
@@ -21,7 +21,8 @@ export async function createProject(
   inputs: z.infer<typeof createProjectSchema>
 ) {
   try {
-    const project = await v0Client.projects.create(inputs);
+    const client = v0ClientManager.getClient();
+    const project = await client.projects.create(inputs);
 
     const result = {
       content: [

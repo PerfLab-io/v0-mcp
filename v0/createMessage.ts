@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { v0Client } from "./client";
+import { v0ClientManager } from "./client";
 import { handleApiKeyError } from "@/app/api/[[...route]]/error-handler";
 
 export const createMessageSchema = z.object({
@@ -19,7 +19,8 @@ export async function createMessage(
   inputs: z.infer<typeof createMessageSchema>
 ) {
   try {
-    const message = await v0Client.chats.createMessage({
+    const client = v0ClientManager.getClient();
+    const message = await client.chats.sendMessage({
       chatId: inputs.chatId,
       message: inputs.message,
       modelConfiguration: inputs.modelConfiguration,
