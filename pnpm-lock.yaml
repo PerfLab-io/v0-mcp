@@ -192,8 +192,8 @@ importers:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@3.4.17)
       v0-sdk:
-        specifier: ^0.0.12
-        version: 0.0.12
+        specifier: ^0.2.2
+        version: 0.2.2
       vaul:
         specifier: ^0.9.6
         version: 0.9.9(@types/react-dom@19.1.6(@types/react@19.1.8))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -3719,8 +3719,8 @@ packages:
     resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
     hasBin: true
 
-  v0-sdk@0.0.12:
-    resolution: {integrity: sha512-6ixBBsM5WZxepIizcwIAgh6HDx3CD0wH56TunmAgpSrb9vDkLE+0ffkpLqoD+xxYSh6S7Xx+59KPyERudBg2QQ==}
+  v0-sdk@0.2.2:
+    resolution: {integrity: sha512-uqJnaJ/PjqaSGZPQBSh9dP+tQk4Dc9uNtpUkodpmexqffRNXLI/CG+yaTpb4jf8QwOz3KyDT8G6wbHGDgO6Eyw==}
 
   vary@1.1.2:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
@@ -7340,7 +7340,7 @@ snapshots:
 
   uuid@9.0.1: {}
 
-  v0-sdk@0.0.12: {}
+  v0-sdk@0.2.2: {}
 
   vary@1.1.2: {}
 
