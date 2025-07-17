@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { v0ClientManager, sessionApiKeyStore } from "./client";
-import { handleApiKeyError } from "@/app/api/[[...route]]/error-handler";
+import { handleApiKeyError } from "@/lib/error-handler";
 import { sessionFileStore } from "@/resources/sessionFileStore";
 
 export const createMessageSchema = z.object({
@@ -26,12 +26,17 @@ export async function createMessage(
       message: inputs.message,
       modelConfiguration: inputs.modelConfiguration,
     });
-    
+
     // Store files and update last chat ID
     const sessionId = sessionApiKeyStore.getCurrentSessionId();
     if (sessionId) {
       if (message.files && message.files.length > 0) {
-        await sessionFileStore.addFilesFromChat(sessionId, inputs.chatId, message.files, message.id);
+        await sessionFileStore.addFilesFromChat(
+          sessionId,
+          inputs.chatId,
+          message.files,
+          message.id
+        );
       } else {
         // Still update last chat ID even if no files
         await sessionFileStore.setLastChatId(sessionId, inputs.chatId);

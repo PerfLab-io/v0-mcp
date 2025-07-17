@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { v0ClientManager } from "./client";
-import { handleApiKeyError } from "@/app/api/[[...route]]/error-handler";
+import { handleApiKeyError } from "@/lib/error-handler";
 
 export const findChatsSchema = z.object({
   limit: z.string().optional().describe("Maximum number of chats to return"),

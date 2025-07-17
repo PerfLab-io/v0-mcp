@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { sessionFileStore } from "@/resources/sessionFileStore";
 import { sessionApiKeyStore } from "./client";
-import { handleApiKeyError } from "@/app/api/[[...route]]/error-handler";
+import { handleApiKeyError } from "@/lib/error-handler";
 
 export const listFilesSchema = z.object({
   chatId: z.string().optional().describe("Filter files by specific chat ID"),

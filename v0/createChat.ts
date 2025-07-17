@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { v0ClientManager, sessionApiKeyStore } from "./client";
-import { handleApiKeyError } from "@/app/api/[[...route]]/error-handler";
+import { handleApiKeyError } from "@/lib/error-handler";
 import { sessionFileStore } from "@/resources/sessionFileStore";
 
 export const createChatSchema = z.object({
@@ -28,7 +28,7 @@ export async function createChat(inputs: z.infer<typeof createChatSchema>) {
   try {
     const client = v0ClientManager.getClient();
     const chat = await client.chats.create(inputs);
-    
+
     // Store files and last chat ID
     const sessionId = sessionApiKeyStore.getCurrentSessionId();
     if (sessionId && chat.files && chat.files.length > 0) {
