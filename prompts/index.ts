@@ -60,7 +60,7 @@ export const v0Prompts = [
     arguments: [
       {
         name: "action",
-        description: "Action to perform (list, search, favorite, organize)",
+        description: "Action to perform (list, search, favorite, delete)",
         required: false,
       },
     ],
@@ -83,28 +83,14 @@ export const v0Prompts = [
     ],
   },
   {
-    name: "v0_workflow_optimization",
-    title: "V0 Workflow Optimization",
-    description: "Advanced tips for optimizing your V0 development workflow",
+    name: "v0_chat_delete",
+    title: "Delete V0 Chat",
+    description: "Guide for deleting a V0 chat",
     arguments: [
       {
-        name: "use_case",
-        description:
-          "Primary use case (prototyping, production, learning, etc.)",
-        required: false,
-      },
-    ],
-  },
-  {
-    name: "v0_troubleshooting",
-    title: "V0 Troubleshooting",
-    description: "Help with common V0 issues and error resolution",
-    arguments: [
-      {
-        name: "issue_type",
-        description:
-          "Type of issue (api_error, chat_problem, project_issue, etc.)",
-        required: false,
+        name: "chat_id",
+        description: "The ID of the chat to delete",
+        required: true,
       },
     ],
   },
@@ -124,10 +110,8 @@ export async function getPromptContent(
       return generateOrganizeChatsPrompt(args);
     case "v0_project_setup":
       return generateProjectSetupPrompt(args);
-    case "v0_workflow_optimization":
-      return generateWorkflowOptimizationPrompt(args);
-    case "v0_troubleshooting":
-      return generateTroubleshootingPrompt(args);
+    case "v0_chat_delete":
+      return generateChatDeletePrompt(args);
     default:
       throw new Error(`Unknown prompt: ${name}`);
   }
@@ -441,261 +425,33 @@ Ready to start? Begin by using the create_project tool with your project details
   };
 }
 
-function generateWorkflowOptimizationPrompt(args: Record<string, any>) {
-  const useCase = args.use_case || "development";
+function generateChatDeletePrompt(args: Record<string, any>) {
+  const chatId = args.chat_id;
 
   return {
     role: "user" as const,
     content: {
       type: "text" as const,
-      text: `Advanced V0 Workflow Optimization for ${useCase}
+      text: `You are about to delete a V0 chat. Here's a comprehensive guide to get the best results:
 
-## Optimizing Your V0 Development Workflow
+## V0 Chat Deletion Guide
 
-### 1. Tool Usage Patterns:
+### 1. Deleting a Chat:
 
-**Efficient Chat Management:**
-- Use create_chat for new concepts/projects
-- Use create_message for iterative improvements
-- Use find_chats with filters to quickly locate relevant work
-- Use favorite_chat to mark active projects
-
-**Optimal Message Crafting:**
-- Be specific and detailed in initial messages
-- Reference previous work when iterating
-- Use clear, actionable language
-- Include context about your goals
-
-### 2. ${useCase} Optimization:
-
-${
-  useCase === "prototyping"
-    ? `
-**Prototyping Focus:**
-- Use v0-1.5-sm model for quick iterations
-- Create multiple chat variants for A/B concepts
-- Focus on core functionality before polish
-- Use create_message for rapid iterations
-`
-    : useCase === "production"
-    ? `
-**Production Focus:**
-- Use v0-1.5-lg model for complex, robust code
-- Create detailed project documentation
-- Implement comprehensive error handling
-- Focus on performance and accessibility
-`
-    : useCase === "learning"
-    ? `
-**Learning Focus:**
-- Ask for explanations in your messages
-- Request code comments and documentation
-- Create focused chats for specific concepts
-- Use thinking mode for detailed reasoning
-`
-    : `
-**General Development:**
-- Balance model size with complexity needs
-- Organize chats by feature or component
-- Use systematic iteration approaches
-- Maintain clear project structure
-`
-}
-
-### 3. Advanced Techniques:
-
-**Multi-Chat Strategy:**
-- Create separate chats for different features
-- Use consistent naming conventions
-- Cross-reference between related chats
-- Maintain a "main" chat for integration
-
-**Iteration Optimization:**
-- Start broad, then refine specifics
-- Test one change at a time
-- Provide clear feedback on results
-- Build incrementally
-
-**Organization System:**
-- Favorite active project chats
-- Use descriptive initial messages
-- Implement consistent chat privacy settings
-- Regular cleanup of completed work
-
-### 4. Quality Improvement:
-
-**Message Quality:**
-- Include specific requirements and constraints
-- Provide examples when helpful
-- Mention edge cases and error scenarios
-- Request specific testing approaches
-
-**Code Quality:**
-- Ask for TypeScript when appropriate
-- Request responsive design considerations
-- Include accessibility requirements
-- Specify performance expectations
-
-### 5. Workflow Tools Integration:
-
-\`\`\`javascript
-// Example workflow automation
-async function optimizedV0Workflow() {
-  // 1. Find active chats
-  const activeChats = await find_chats({ isFavorite: "true" });
-  
-  // 2. Continue most recent active chat
-  const latestChat = activeChats.data[0];
-  await create_message({
-    chatId: latestChat.id,
-    message: "Continue development with [specific feature]"
-  });
-  
-  // 3. Organize completed work
-  await favorite_chat({
-    chatId: completedChatId,
-    isFavorite: false
-  });
-}
-\`\`\`
-
-Optimize your ${useCase} workflow by implementing these strategies systematically!`,
-    },
-  };
-}
-
-function generateTroubleshootingPrompt(args: Record<string, any>) {
-  const issueType = args.issue_type || "general";
-
-  return {
-    role: "user" as const,
-    content: {
-      type: "text" as const,
-      text: `V0 Troubleshooting Guide for ${issueType} issues
-
-## V0 Troubleshooting Guide
-
-### 1. Common Issue Resolution:
-
-**${issueType} Issues:**
-${
-  issueType === "api_error"
-    ? `
-- Check your API key authorization
-- Verify OAuth token is valid
-- Ensure proper session management
-- Review error messages for specific details
-`
-    : issueType === "chat_problem"
-    ? `
-- Verify chat ID exists using find_chats
-- Check if chat is accessible (privacy settings)
-- Ensure proper message formatting
-- Try refreshing your session
-`
-    : issueType === "project_issue"
-    ? `
-- Verify project exists and is accessible
-- Check project permissions and settings
-- Ensure proper project association
-- Review project configuration
-`
-    : `
-- Start with basic connectivity tests
-- Check authentication status
-- Review recent error messages
-- Try simple operations first
-`
-}
-
-### 2. Diagnostic Steps:
-
-**Step 1: Basic Connectivity**
+**Delete Chat:**
 \`\`\`json
-// Test with get_user_info
-{}
-\`\`\`
-
-**Step 2: List Resources**
-\`\`\`json
-// Check available chats
 {
-  "limit": "5"
+  "chatId": "${chatId}"
 }
 \`\`\`
 
-**Step 3: Test Specific Functionality**
-\`\`\`json
-// Create a simple test chat
-{
-  "message": "Test chat creation - please confirm this works"
-}
-\`\`\`
+### 2. Deletion Best Practices:
+- Confirm deletion with user
+- Provide confirmation before deletion
+- Use descriptive messages for deletion
+- Ensure proper permissions for deletion
 
-### 3. Error Resolution Strategies:
-
-**Authentication Errors:**
-- Verify your V0 API key is valid
-- Check OAuth authorization flow
-- Ensure proper session establishment
-- Try re-authenticating if needed
-
-**Chat Access Errors:**
-- Use find_chats to verify chat exists
-- Check chat privacy settings
-- Ensure you have proper permissions
-- Try accessing a different chat
-
-**API Response Errors:**
-- Check for rate limiting issues
-- Verify request format and parameters
-- Review error message details
-- Try simplified requests
-
-### 4. Common Error Messages:
-
-**"API key is required"**
-- Complete OAuth authorization flow
-- Ensure Bearer token is properly set
-- Check session authentication status
-
-**"Chat not found"**
-- Verify chat ID with find_chats
-- Check if chat was deleted
-- Ensure proper permissions
-
-**"Invalid request"**
-- Review parameter formatting
-- Check required vs. optional fields
-- Validate JSON structure
-
-### 5. Getting Help:
-
-**Information to Gather:**
-- Exact error messages
-- Steps that led to the issue
-- Your current configuration
-- Recent changes to your setup
-
-**Debugging Commands:**
-\`\`\`bash
-# Check MCP server status
-curl http://localhost:3000/api/ping
-
-# Verify OAuth endpoints
-curl http://localhost:3000/api/.well-known/oauth-authorization-server
-
-# Test protected resource metadata
-curl http://localhost:3000/api/.well-known/oauth-protected-resource
-\`\`\`
-
-**Recovery Steps:**
-1. Start with get_user_info to test basic connectivity
-2. Use find_chats to verify access to your data
-3. Try creating a simple test chat
-4. If issues persist, check OAuth authorization
-
-Need immediate help? Start with the basic connectivity test using get_user_info!`,
+Ready to delete? Use the delete_chat tool with the chat_id of the chat you want to delete!`,
     },
   };
 }

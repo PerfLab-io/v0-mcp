@@ -11,6 +11,8 @@ import {
   favoriteChat,
   listFiles,
 } from "@/v0/index";
+import { sessionFileStore } from "@/resources/sessionFileStore";
+import { getMimeType } from "@/lib/utils";
 
 // Simple MCP server implementation
 export async function POST(request: NextRequest) {
@@ -318,63 +320,172 @@ export async function POST(request: NextRequest) {
         });
 
       case "resources/list":
-        return NextResponse.json({
-          jsonrpc: "2.0",
-          id,
-          result: {
-            resources: [
-              {
-                uri: "v0://user/config",
-                name: "v0 User Configuration",
-                description: "User configuration and settings from v0",
-                mimeType: "application/json",
-              },
-              {
-                uri: "v0://projects/{projectId}",
-                name: "v0 Project Information",
-                description: "Detailed information about a v0 project",
-                mimeType: "application/json",
-              },
-            ],
-          },
-        });
-
-      case "resources/read":
-        const uri = params?.uri;
-        if (uri === "v0://user/config") {
+        try {
+          const token = authHeader.substring(7);
+          const sessionFiles = await sessionFileStore.getSessionFiles(token);
+          const lastChatId = await sessionFileStore.getLastChatId(token);
+          
+          const resources = [
+            {
+              uri: "v0://user/config",
+              name: "v0 User Configuration",
+              description: "User configuration and settings from v0",
+              mimeType: "application/json",
+            },
+            {
+              uri: "v0://session/stats",
+              name: "Session File Statistics",
+              description: "Statistics about files generated in this session",
+              mimeType: "application/json",
+            },
+          ];
+          
+          // Add last chat resources if available
+          if (lastChatId) {
+            resources.push({
+              uri: `v0://chats/${lastChatId}`,
+              name: `Chat ${lastChatId} Files`,
+              description: `Files from the last interacted chat (${lastChatId})`,
+              mimeType: "application/json",
+            });
+          }
+          
+          // Add individual file resources
+          for (const sessionFile of sessionFiles) {
+            const filename = sessionFile.file.meta?.filename || 
+              `${sessionFile.file.lang}_file_${sessionFile.id.slice(-8)}`;
+            
+            resources.push({
+              uri: sessionFile.uri,
+              name: filename,
+              description: `${sessionFile.file.lang} file from chat ${sessionFile.chatId}`,
+              mimeType: getMimeType(sessionFile.file.lang),
+            });
+          }
+          
           return NextResponse.json({
             jsonrpc: "2.0",
             id,
-            result: {
-              contents: [
-                {
-                  uri,
-                  mimeType: "application/json",
-                  text: JSON.stringify(
-                    {
-                      userId: "example-user",
-                      settings: {
-                        theme: "dark",
-                        language: "en",
-                      },
-                    },
-                    null,
-                    2
-                  ),
-                },
-              ],
+            result: { resources },
+          });
+        } catch (error) {
+          return NextResponse.json({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: -32603,
+              message: "Failed to list resources",
+              data: error instanceof Error ? error.message : "Unknown error",
             },
           });
         }
 
-        return NextResponse.json({
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: -32602,
-            message: `Resource not found: ${uri}`,
-          },
-        });
+      case "resources/read":
+        try {
+          const uri = params?.uri;
+          const token = authHeader.substring(7);
+          
+          if (uri === "v0://user/config") {
+            const userInfo = await getUserInfo();
+            return NextResponse.json({
+              jsonrpc: "2.0",
+              id,
+              result: {
+                contents: [
+                  {
+                    uri,
+                    mimeType: "application/json",
+                    text: JSON.stringify(userInfo.rawResponse, null, 2),
+                  },
+                ],
+              },
+            });
+          }
+          
+          if (uri === "v0://session/stats") {
+            const stats = await sessionFileStore.getFileStats(token);
+            return NextResponse.json({
+              jsonrpc: "2.0",
+              id,
+              result: {
+                contents: [
+                  {
+                    uri,
+                    mimeType: "application/json",
+                    text: JSON.stringify(stats, null, 2),
+                  },
+                ],
+              },
+            });
+          }
+          
+          // Handle chat files
+          if (uri?.startsWith("v0://chats/")) {
+            const chatId = uri.split("/").pop();
+            if (chatId) {
+              const chatFiles = await sessionFileStore.getChatFiles(token, chatId);
+              const fileList = chatFiles.map(file => ({
+                id: file.id,
+                filename: file.file.meta?.filename || `${file.file.lang}_file_${file.id.slice(-8)}`,
+                language: file.file.lang,
+                uri: file.uri,
+                createdAt: file.createdAt,
+                messageId: file.messageId,
+              }));
+              
+              return NextResponse.json({
+                jsonrpc: "2.0",
+                id,
+                result: {
+                  contents: [
+                    {
+                      uri,
+                      mimeType: "application/json",
+                      text: JSON.stringify({ chatId, files: fileList }, null, 2),
+                    },
+                  ],
+                },
+              });
+            }
+          }
+          
+          // Handle individual file content
+          const sessionFile = sessionFileStore.getFileByUri(uri);
+          if (sessionFile) {
+            return NextResponse.json({
+              jsonrpc: "2.0",
+              id,
+              result: {
+                contents: [
+                  {
+                    uri,
+                    mimeType: getMimeType(sessionFile.file.lang),
+                    text: sessionFile.file.source,
+                  },
+                ],
+              },
+            });
+          }
+
+          return NextResponse.json({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: -32602,
+              message: `Resource not found: ${uri}`,
+            },
+          });
+        } catch (error) {
+          return NextResponse.json({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: -32603,
+              message: "Failed to read resource",
+              data: error instanceof Error ? error.message : "Unknown error",
+            },
+          });
+        }
 
       default:
         return NextResponse.json({

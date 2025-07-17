@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { v0ClientManager } from "./client";
+import { v0ClientManager, sessionApiKeyStore } from "./client";
 import { handleApiKeyError } from "@/app/api/[[...route]]/error-handler";
+import { sessionFileStore } from "@/resources/sessionFileStore";
 
 export const createMessageSchema = z.object({
   chatId: z.string().describe("The ID of the chat to add a message to"),
@@ -25,10 +26,21 @@ export async function createMessage(
       message: inputs.message,
       modelConfiguration: inputs.modelConfiguration,
     });
+    
+    // Store files and update last chat ID
+    const sessionId = sessionApiKeyStore.getCurrentSessionId();
+    if (sessionId) {
+      if (message.files && message.files.length > 0) {
+        await sessionFileStore.addFilesFromChat(sessionId, inputs.chatId, message.files, message.id);
+      } else {
+        // Still update last chat ID even if no files
+        await sessionFileStore.setLastChatId(sessionId, inputs.chatId);
+      }
+    }
 
     const fileInfo =
       message.files && message.files.length > 0
-        ? `\n📁 Generated ${message.files.length} file(s) - use list_files tool to view them`
+        ? `\n📁 Generated ${message.files.length} file(s) - use list_files tool to view them or access via MCP resources`
         : "";
 
     const result = {

@@ -42,7 +42,6 @@ class SessionApiKeyStore {
 }
 
 export const sessionApiKeyStore = SessionApiKeyStore.getInstance();
-
 class V0ClientManager {
   private static instance: V0ClientManager;
   private client: ReturnType<typeof createClient> | null = null;

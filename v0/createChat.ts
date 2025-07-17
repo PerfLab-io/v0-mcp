@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { v0ClientManager } from "./client";
+import { v0ClientManager, sessionApiKeyStore } from "./client";
 import { handleApiKeyError } from "@/app/api/[[...route]]/error-handler";
+import { sessionFileStore } from "@/resources/sessionFileStore";
 
 export const createChatSchema = z.object({
   message: z.string().describe("The message to send to v0"),
@@ -27,10 +28,16 @@ export async function createChat(inputs: z.infer<typeof createChatSchema>) {
   try {
     const client = v0ClientManager.getClient();
     const chat = await client.chats.create(inputs);
+    
+    // Store files and last chat ID
+    const sessionId = sessionApiKeyStore.getCurrentSessionId();
+    if (sessionId && chat.files && chat.files.length > 0) {
+      await sessionFileStore.addFilesFromChat(sessionId, chat.id, chat.files);
+    }
 
     const fileInfo =
       chat.files && chat.files.length > 0
-        ? `\n📁 Generated ${chat.files.length} file(s) - use list_files tool to view them`
+        ? `\n📁 Generated ${chat.files.length} file(s) - use list_files tool to view them or access via MCP resources`
         : "";
 
     const result = {

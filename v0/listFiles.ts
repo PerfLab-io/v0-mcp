@@ -34,11 +34,17 @@ export async function listFiles(inputs: z.infer<typeof listFilesSchema>) {
   }
 
   try {
-    let files = sessionFileStore.getSessionFiles(sessionId);
+    let files = await sessionFileStore.getSessionFiles(sessionId);
+    let effectiveChatId = inputs.chatId;
+
+    // If no chatId provided, use the last chat ID if available
+    if (!effectiveChatId) {
+      effectiveChatId = await sessionFileStore.getLastChatId(sessionId);
+    }
 
     // Apply filters
-    if (inputs.chatId) {
-      files = files.filter((file) => file.chatId === inputs.chatId);
+    if (effectiveChatId) {
+      files = files.filter((file) => file.chatId === effectiveChatId);
     }
 
     if (inputs.language) {
@@ -70,8 +76,11 @@ export async function listFiles(inputs: z.infer<typeof listFilesSchema>) {
 
     let response = `Found ${files.length} file(s)`;
 
-    if (inputs.chatId) {
-      response += ` for chat ${inputs.chatId}`;
+    if (effectiveChatId) {
+      response += ` for chat ${effectiveChatId}`;
+      if (!inputs.chatId) {
+        response += " (last interacted chat)";
+      }
     }
 
     if (inputs.language) {
@@ -83,7 +92,7 @@ export async function listFiles(inputs: z.infer<typeof listFilesSchema>) {
     if (files.length === 0) {
       response += "No files found matching the criteria.";
 
-      if (!inputs.chatId && !inputs.language) {
+      if (!effectiveChatId && !inputs.language) {
         response +=
           "\n\nTo get files, create a chat or message that generates code. Files are automatically saved from V0 responses.";
       }
@@ -93,7 +102,7 @@ export async function listFiles(inputs: z.infer<typeof listFilesSchema>) {
 
     // Add statistics if requested
     if (inputs.includeStats) {
-      const stats = sessionFileStore.getFileStats(sessionId);
+      const stats = await sessionFileStore.getFileStats(sessionId);
       response += `\n\n📊 Session Statistics:
 Total Files: ${stats.totalFiles}
 
@@ -126,7 +135,7 @@ By Language:`;
       rawResponse: {
         files,
         stats: inputs.includeStats
-          ? sessionFileStore.getFileStats(sessionId)
+          ? await sessionFileStore.getFileStats(sessionId)
           : undefined,
       },
     };
