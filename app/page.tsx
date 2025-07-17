@@ -18,6 +18,9 @@ import { useEffect, useState } from "react";
 export default function MCPLandingPage() {
   const [animationFrame, setAnimationFrame] = useState(0);
   const [secondaryFrame, setSecondaryFrame] = useState(0);
+  const protocol = window.location.protocol;
+  const host = window.location.host;
+  const mcpUrl = `${protocol}://${host}/api/mcp`;
 
   // Helper function to create dotted patterns
   const createDottedPattern = (color: string) => ({
@@ -90,11 +93,9 @@ export default function MCPLandingPage() {
   ];
 
   const handleCursorInstall = () => {
-    const protocol = window.location.protocol;
-    const host = window.location.host;
     // For Cursor, we'll use the deeplink format with base64 encoded config
     const config = {
-      url: `${protocol}://${host}/mcp`,
+      url: mcpUrl,
       description: "v0.dev MCP Server",
     };
 
@@ -105,13 +106,11 @@ export default function MCPLandingPage() {
   };
 
   const handleVSCodeInstall = () => {
-    const protocol = window.location.protocol;
-    const host = window.location.host;
     // For VSCode, we'll use the MCP URL handler with HTTP transport
     const obj = {
       label: "v0-mcp",
       type: "http",
-      uri: `${protocol}://${host}/mcp`,
+      uri: mcpUrl,
       headers: {
         "Content-Type": "application/json",
       },
@@ -134,25 +133,33 @@ export default function MCPLandingPage() {
   const serverFeatures = [
     {
       icon: Code,
-      title: "Component Discovery",
+      title: "V0 Chat Tools",
       description:
-        "Browse and search through your V0 component registry. Find the right components for your use case with intelligent filtering and categorization.",
-      bgColor: "bg-pink-500",
-      borderColor: "#be185d",
+        "Create chats, send messages, and manage conversations. Generate components and iterate on designs with AI-powered development tools directly in your coding environment.",
+      bgColor: "bg-blue-500",
+      borderColor: "#2563eb",
     },
     {
       icon: Database,
-      title: "Design System Integration",
+      title: "File Resources",
       description:
-        "Access design tokens, style guides, and component documentation directly within your AI coding environment for consistent implementations.",
+        "Access generated files from V0 chats as MCP resources. Browse, read, and integrate code files with session-based caching and smart file management across lambda instances.",
+      bgColor: "bg-green-500",
+      borderColor: "#16a34a",
+    },
+    {
+      icon: Sparkles,
+      title: "Smart Prompts",
+      description:
+        "Pre-configured prompt templates for V0 development workflows. Get contextual assistance for component creation, design system integration, and development best practices.",
       bgColor: "bg-purple-500",
       borderColor: "#7c3aed",
     },
     {
       icon: Zap,
-      title: "Real-time Updates",
+      title: "Session Management",
       description:
-        "Stay synchronized with the latest component updates and design system changes through HTTP transport with automatic refresh capabilities.",
+        "Persistent sessions with KV storage backing. Track chat history, manage API keys securely, and maintain context across different AI coding sessions with OAuth2 authentication.",
       bgColor: "bg-orange-500",
       borderColor: "#ea580c",
     },
@@ -299,9 +306,11 @@ export default function MCPLandingPage() {
                   <div className="flex items-center justify-center gap-3">
                     <Code className="h-5 w-5" />
                     <span className="text-lg">Install for Cursor</span>
-                    <Copy className="h-4 w-4 opacity-70" />
+                    <ExternalLink className="h-4 w-4 opacity-70" />
                   </div>
-                  <div className="text-xs opacity-80 mt-1">Copy MCP config</div>
+                  <div className="text-xs opacity-80 mt-1">
+                    Click to install
+                  </div>
                 </button>
               </div>
 
@@ -321,7 +330,7 @@ export default function MCPLandingPage() {
                     <ExternalLink className="h-4 w-4 opacity-70" />
                   </div>
                   <div className="text-xs opacity-80 mt-1">
-                    Open MCP handler
+                    Click to install
                   </div>
                 </button>
               </div>
@@ -343,7 +352,7 @@ export default function MCPLandingPage() {
                     size="sm"
                     onClick={() =>
                       copyToClipboard(
-                        "claude mcp add --transport http v0-mcp http://localhost:3001/mcp"
+                        `claude mcp add --transport http v0-mcp ${mcpUrl}`
                       )
                     }
                     className="h-6 w-6 p-0 text-gray-400 hover:text-white"
@@ -352,7 +361,7 @@ export default function MCPLandingPage() {
                   </Button>
                 </div>
                 <pre className="text-gray-400 leading-relaxed">
-                  {`claude mcp add --transport http v0-mcp http://localhost:3001/mcp`}
+                  {`claude mcp add --transport http v0-mcp ${mcpUrl}`}
                 </pre>
               </div>
             </div>
@@ -523,7 +532,7 @@ export default function MCPLandingPage() {
       </section>*/}
 
       {/* Footer */}
-      <footer className="border-t-2 border-gray-800 py-8 bg-black self-end">
+      <footer className="border-t-2 border-gray-800 py-8 bg-black">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="text-gray-400 text-sm mb-4 md:mb-0 font-mono">
