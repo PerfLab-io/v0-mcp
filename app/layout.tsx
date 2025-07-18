@@ -3,10 +3,10 @@ import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "v0 MCP Server",
+  title: "v0 MCP Server - By Perflab.io",
   description:
     "Model Context Protocol (MCP) server that exposes v0.dev APIs through the Streamable HTTP pattern. Built with Hono framework and deployed on Vercel.",
-  generator: "v0.dev",
+  generator: "v0.perflab.io",
   keywords: [
     "v0",
     "MCP",
@@ -17,18 +17,18 @@ export const metadata: Metadata = {
     "Vercel",
     "Hono",
   ],
-  authors: [{ name: "v0.dev" }],
-  creator: "v0.dev",
-  publisher: "v0.dev",
-  metadataBase: new URL("https://v0-mcp.vercel.app"),
+  authors: [{ name: "v0.perflab.io" }],
+  creator: "v0.perflab.io",
+  publisher: "v0.perflab.io",
+  metadataBase: new URL("https://v0.perflab.io"),
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "v0 MCP Server",
+    title: "v0 MCP Server - By Perflab.io",
     description:
       "Model Context Protocol (MCP) server that exposes v0.dev APIs through the Streamable HTTP pattern. Built with Hono framework and deployed on Vercel.",
-    url: "https://v0-mcp.vercel.app",
+    url: "https://v0.perflab.io",
     siteName: "v0 MCP Server",
     images: [
       {
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "v0 MCP Server",
+    title: "v0 MCP Server - By Perflab.io",
     description:
       "Model Context Protocol (MCP) server that exposes v0.dev APIs through the Streamable HTTP pattern.",
     images: ["/v0-mcp.jpg"],
