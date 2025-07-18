@@ -32,21 +32,21 @@ export const metadata: Metadata = {
     siteName: "v0 MCP Server",
     images: [
       {
-        url: "/favicon.svg",
-        width: 32,
-        height: 32,
-        alt: "v0 MCP Server Logo",
+        url: "/v0-mcp.jpg",
+        width: 1200,
+        height: 630,
+        alt: "v0 MCP Server - Model Context Protocol server for v0.dev APIs",
       },
     ],
     locale: "en_US",
     type: "website",
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "v0 MCP Server",
     description:
       "Model Context Protocol (MCP) server that exposes v0.dev APIs through the Streamable HTTP pattern.",
-    images: ["/favicon.svg"],
+    images: ["/v0-mcp.jpg"],
   },
   icons: {
     icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
