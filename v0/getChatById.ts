@@ -25,7 +25,7 @@ export async function getChatById(inputs: z.infer<typeof getChatByIdSchema>) {
             sessionId,
             inputs.chatId,
             files,
-            inputs.chatId
+            inputs.chatId,
           );
         }
       }
@@ -37,7 +37,7 @@ export async function getChatById(inputs: z.infer<typeof getChatByIdSchema>) {
         ?.map(
           (file) =>
             `  - File Name: ${file.lang}
-    Content: ${file.source}`
+    Content: ${file.source}`,
         )
         .join("\n") || "No versions available";
 

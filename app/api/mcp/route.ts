@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
           headers: {
             "WWW-Authenticate": `Bearer error="invalid_token", error_description="No authorization provided", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`,
           },
-        }
+        },
       );
     }
 
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
           error: "invalid_token",
           error_description: "Invalid access token",
         },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -61,14 +61,14 @@ export async function POST(request: NextRequest) {
           error: "invalid_token",
           error_description: "Access token expired",
         },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
     // Decrypt API key
     const decryptedApiKey = decryptApiKey(
       tokenData.encryptedApiKey,
-      tokenData.clientId
+      tokenData.clientId,
     );
     sessionApiKeyStore.setSessionApiKey(token, decryptedApiKey);
     sessionApiKeyStore.setCurrentSession(token);
@@ -531,7 +531,7 @@ export async function POST(request: NextRequest) {
             if (chatId) {
               const chatFiles = await sessionFileStore.getChatFiles(
                 token,
-                chatId
+                chatId,
               );
               const fileList = chatFiles.map((file) => ({
                 id: file.id,
@@ -555,7 +555,7 @@ export async function POST(request: NextRequest) {
                       text: JSON.stringify(
                         { chatId, files: fileList },
                         null,
-                        2
+                        2,
                       ),
                     },
                   ],
@@ -624,7 +624,7 @@ export async function POST(request: NextRequest) {
         },
         id: null,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

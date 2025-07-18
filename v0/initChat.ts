@@ -13,7 +13,7 @@ const fileInputSchema = z
     (data) => (data.content && !data.url) || (!data.content && data.url),
     {
       message: "File must have either content or url, but not both",
-    }
+    },
   );
 
 export const initChatSchema = z.object({
@@ -53,7 +53,7 @@ export async function initChat(inputs: z.infer<typeof initChatSchema>) {
         sessionId,
         chat.id,
         chat.files,
-        chat.id
+        chat.id,
       );
     }
 
@@ -61,7 +61,7 @@ export async function initChat(inputs: z.infer<typeof initChatSchema>) {
     const filesInfo =
       chat.files
         ?.map(
-          (file) => `  - ${file.lang} file (${file.source?.length || 0} chars)`
+          (file) => `  - ${file.lang} file (${file.source?.length || 0} chars)`,
         )
         .join("\n") || "No files available";
 

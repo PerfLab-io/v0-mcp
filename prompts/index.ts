@@ -97,26 +97,31 @@ export const v0Prompts = [
   {
     name: "init_v0_chat_from_files",
     title: "Initialize V0 Chat from Files",
-    description: "Guide for initializing a V0 chat from existing files. The MCP client should ask the user what directories, files, or file patterns to grep and send over.",
+    description:
+      "Guide for initializing a V0 chat from existing files. The MCP client should ask the user what directories, files, or file patterns to grep and send over.",
     arguments: [
       {
         name: "directories",
-        description: "One or more directory paths to scan for files (comma-separated)",
+        description:
+          "One or more directory paths to scan for files (comma-separated)",
         required: false,
       },
       {
         name: "files",
-        description: "One or more specific file paths to include (comma-separated)",
+        description:
+          "One or more specific file paths to include (comma-separated)",
         required: false,
       },
       {
         name: "file_patterns",
-        description: "File patterns to match (e.g., '*.js,*.ts,*.jsx,*.tsx,*.py,*.go')",
+        description:
+          "File patterns to match (e.g., '*.js,*.ts,*.jsx,*.tsx,*.py,*.go')",
         required: false,
       },
       {
         name: "privacy",
-        description: "Chat privacy setting (public, private, team-edit, team, unlisted)",
+        description:
+          "Chat privacy setting (public, private, team-edit, team, unlisted)",
         required: false,
       },
     ],

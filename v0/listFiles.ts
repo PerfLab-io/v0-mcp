@@ -58,7 +58,10 @@ export async function listFiles(inputs: z.infer<typeof listFilesSchema>) {
         files = files.filter((file) => file.chatId === effectiveChatId);
       } catch (fetchError) {
         // If fetching fails, we'll continue with empty results
-        console.warn(`Failed to fetch chat ${effectiveChatId} from v0 API:`, fetchError);
+        console.warn(
+          `Failed to fetch chat ${effectiveChatId} from v0 API:`,
+          fetchError,
+        );
       }
     }
 
