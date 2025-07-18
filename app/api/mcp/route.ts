@@ -263,7 +263,7 @@ export async function POST(request: NextRequest) {
               {
                 name: "init_chat",
                 description:
-                  "Initialize a new v0 chat with a list of files. Those files and its contents will be used to generate a new chat.",
+                  "Initialize a new v0 chat from existing files. If not provided by the user, ask what directory or list of files you should get the contents of to send over.",
                 inputSchema: {
                   type: "object",
                   properties: {
