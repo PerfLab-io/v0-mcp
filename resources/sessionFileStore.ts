@@ -18,7 +18,7 @@ class SessionFileStore {
     sessionId: string,
     chatId: string,
     files: V0File[],
-    messageId?: string
+    messageId?: string,
   ): Promise<SessionFile[]> {
     // Update last chat ID
     await this.setLastChatId(sessionId, chatId);
@@ -33,7 +33,7 @@ class SessionFileStore {
 
       // Check if file already exists in session
       const existingFile = sessionFileList.find(
-        (sf) => sf.file.source === file.source && sf.file.lang === file.lang
+        (sf) => sf.file.source === file.source && sf.file.lang === file.lang,
       );
 
       if (!existingFile) {
@@ -80,7 +80,7 @@ class SessionFileStore {
 
   async getChatFiles(
     sessionId: string,
-    chatId: string
+    chatId: string,
   ): Promise<SessionFile[]> {
     const sessionFiles = await this.getSessionFiles(sessionId);
     return sessionFiles.filter((file) => file.chatId === chatId);
@@ -159,7 +159,7 @@ class SessionFileStore {
   private async loadSessionData(sessionId: string): Promise<void> {
     try {
       const sessionData = (await API_KV.get(
-        `session:${sessionId}:data`
+        `session:${sessionId}:data`,
       )) as SessionData | null;
 
       if (sessionData) {

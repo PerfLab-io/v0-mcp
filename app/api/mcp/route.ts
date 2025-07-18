@@ -16,6 +16,13 @@ import {
 import { sessionFileStore } from "@/resources/sessionFileStore";
 import { getMimeType } from "@/lib/utils";
 import { v0Prompts, getPromptContent } from "@/prompts/index";
+import {
+  trackToolUsage,
+  trackPromptUsage,
+  trackResourceUsage,
+  trackSessionStart,
+  trackError,
+} from "@/lib/analytics.server";
 
 // Simple MCP server implementation
 export async function POST(request: NextRequest) {
@@ -72,6 +79,9 @@ export async function POST(request: NextRequest) {
     );
     sessionApiKeyStore.setSessionApiKey(token, decryptedApiKey);
     sessionApiKeyStore.setCurrentSession(token);
+
+    // Track session start
+    await trackSessionStart(tokenData.clientId, token);
 
     // Parse MCP request
     const body = await request.json();
@@ -319,6 +329,9 @@ export async function POST(request: NextRequest) {
         const args = params?.arguments || {};
 
         try {
+          // Track tool usage
+          await trackToolUsage(toolName, token);
+
           let result;
 
           switch (toolName) {
@@ -363,6 +376,7 @@ export async function POST(request: NextRequest) {
             },
           });
         } catch (error: any) {
+          await trackError("tool_execution_failed", toolName);
           return NextResponse.json({
             jsonrpc: "2.0",
             id,
@@ -403,6 +417,9 @@ export async function POST(request: NextRequest) {
             });
           }
 
+          // Track prompt usage
+          await trackPromptUsage(promptName, token);
+
           const promptContent = await getPromptContent(promptName, promptArgs);
 
           return NextResponse.json({
@@ -414,6 +431,10 @@ export async function POST(request: NextRequest) {
             },
           });
         } catch (error: any) {
+          await trackError(
+            "prompt_generation_failed",
+            params?.name || "unknown",
+          );
           return NextResponse.json({
             jsonrpc: "2.0",
             id,
@@ -427,6 +448,10 @@ export async function POST(request: NextRequest) {
       case "resources/list":
         try {
           const token = authHeader.substring(7);
+
+          // Track resource usage
+          await trackResourceUsage("list", token);
+
           const sessionFiles = await sessionFileStore.getSessionFiles(token);
           const lastChatId = await sessionFileStore.getLastChatId(token);
 
@@ -475,6 +500,7 @@ export async function POST(request: NextRequest) {
             result: { resources },
           });
         } catch (error) {
+          await trackError("resource_list_failed", "list");
           return NextResponse.json({
             jsonrpc: "2.0",
             id,
@@ -490,6 +516,9 @@ export async function POST(request: NextRequest) {
         try {
           const uri = params?.uri;
           const token = authHeader.substring(7);
+
+          // Track resource usage
+          await trackResourceUsage("read", token);
 
           if (uri === "v0://user/config") {
             const userInfo = await getUserInfo();
@@ -591,6 +620,7 @@ export async function POST(request: NextRequest) {
             },
           });
         } catch (error) {
+          await trackError("resource_read_failed", "read");
           return NextResponse.json({
             jsonrpc: "2.0",
             id,

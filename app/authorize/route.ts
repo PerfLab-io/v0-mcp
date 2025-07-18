@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { V0OAuthProvider } from "@/lib/oauth-provider";
+import {
+  trackAuthStarted,
+  trackAuthSuccess,
+  trackAuthFailure,
+} from "@/lib/analytics.server";
 
 const oauthProvider = new V0OAuthProvider();
 
@@ -28,9 +33,12 @@ export async function GET(request: NextRequest) {
   if (!client_id || !redirect_uri || !code_challenge) {
     return NextResponse.json(
       { error: "Missing required parameters" },
-      { status: 400 },
+      { status: 400 }
     );
   }
+
+  // Track auth flow start
+  await trackAuthStarted(client_id, scope);
 
   // Redirect to auth page with parameters
   const authUrl = new URL("/auth", request.url);
@@ -39,7 +47,7 @@ export async function GET(request: NextRequest) {
   authUrl.searchParams.set("code_challenge", code_challenge);
   authUrl.searchParams.set(
     "code_challenge_method",
-    code_challenge_method || "S256",
+    code_challenge_method || "S256"
   );
   authUrl.searchParams.set("scope", scope || "mcp:tools mcp:resources");
   if (state) authUrl.searchParams.set("state", state);
@@ -63,48 +71,61 @@ export async function POST(request: NextRequest) {
   console.log("Authorize POST request:", { clientId, redirectUri, state });
 
   if (!v0ApiKey) {
+    await trackAuthFailure(clientId, "missing_api_key");
     return NextResponse.json(
       { error: "V0 API key is required" },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
-  const code = await oauthProvider.generateAuthorizationCode(
-    clientId,
-    redirectUri,
-    codeChallenge,
-    codeChallengeMethod,
-    scope,
-    v0ApiKey,
-  );
+  try {
+    const code = await oauthProvider.generateAuthorizationCode(
+      clientId,
+      redirectUri,
+      codeChallenge,
+      codeChallengeMethod,
+      scope,
+      v0ApiKey
+    );
 
-  const redirectUrl = new URL(redirectUri);
-  redirectUrl.searchParams.set("code", code);
-  if (state) redirectUrl.searchParams.set("state", state);
+    const redirectUrl = new URL(redirectUri);
+    redirectUrl.searchParams.set("code", code);
+    if (state) redirectUrl.searchParams.set("state", state);
 
-  // Add iss parameter as recommended by OAuth 2.1
-  const protocol = request.headers.get("x-forwarded-proto") || "https";
-  const host = request.headers.get("host") || "localhost:3000";
-  redirectUrl.searchParams.set("iss", `${protocol}://${host}`);
+    // Add iss parameter as recommended by OAuth 2.1
+    const protocol = request.headers.get("x-forwarded-proto") || "https";
+    const host = request.headers.get("host") || "localhost:3000";
+    redirectUrl.searchParams.set("iss", `${protocol}://${host}`);
 
-  console.log("Redirecting to:", redirectUrl.toString());
+    console.log("Redirecting to:", redirectUrl.toString());
 
-  // Check if this is a custom protocol (like cursor://)
-  const isCustomProtocol =
-    !redirectUri.startsWith("http://") && !redirectUri.startsWith("https://");
+    // Track successful auth
+    await trackAuthSuccess(clientId, scope);
 
-  if (isCustomProtocol) {
-    // For custom protocols, redirect to a success page that handles the callback
-    const successUrl = new URL("/auth/success", request.url);
-    successUrl.searchParams.set("redirect_uri", redirectUri);
-    successUrl.searchParams.set("code", code);
-    if (state) successUrl.searchParams.set("state", state);
-    successUrl.searchParams.set("iss", `${protocol}://${host}`);
+    // Check if this is a custom protocol (like cursor://)
+    const isCustomProtocol =
+      !redirectUri.startsWith("http://") && !redirectUri.startsWith("https://");
 
-    return NextResponse.redirect(successUrl.toString());
+    if (isCustomProtocol) {
+      // For custom protocols, redirect to a success page that handles the callback
+      const successUrl = new URL("/auth/success", request.url);
+      successUrl.searchParams.set("redirect_uri", redirectUri);
+      successUrl.searchParams.set("code", code);
+      if (state) successUrl.searchParams.set("state", state);
+      successUrl.searchParams.set("iss", `${protocol}://${host}`);
+
+      return NextResponse.redirect(successUrl.toString());
+    }
+
+    return NextResponse.redirect(redirectUrl.toString());
+  } catch (error) {
+    await trackAuthFailure(clientId, "authorization_error");
+    console.error("Authorization error:", error);
+    return NextResponse.json(
+      { error: "Authorization failed" },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.redirect(redirectUrl.toString());
 }
 
 export async function OPTIONS() {

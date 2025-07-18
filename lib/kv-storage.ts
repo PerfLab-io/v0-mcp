@@ -25,7 +25,7 @@ export interface KVStorage {
   put(
     key: string,
     value: any,
-    options?: { expirationTtl?: number; isGzip?: boolean }
+    options?: { expirationTtl?: number; isGzip?: boolean },
   ): Promise<void>;
   delete(key: string): Promise<void>;
   list(options?: { prefix?: string }): Promise<string[]>;
@@ -43,7 +43,7 @@ export class OAuthKV implements KVStorage {
   async put(
     key: string,
     value: any,
-    options?: { expirationTtl?: number }
+    options?: { expirationTtl?: number },
   ): Promise<void> {
     const fullKey = `${this.prefix}${key}`;
     if (options?.expirationTtl) {
@@ -98,7 +98,7 @@ export class ApiKV implements KVStorage {
   async put(
     key: string,
     value: any,
-    options?: { expirationTtl?: number }
+    options?: { expirationTtl?: number },
   ): Promise<void> {
     const fullKey = `${this.prefix}${key}`;
     let dataToStore: KVDataWrapper;
@@ -151,7 +151,7 @@ export class SessionKV implements KVStorage {
   async put(
     key: string,
     value: any,
-    options?: { expirationTtl?: number }
+    options?: { expirationTtl?: number },
   ): Promise<void> {
     const fullKey = `${this.prefix}${key}`;
     if (options?.expirationTtl) {

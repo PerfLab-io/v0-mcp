@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle, Copy, ExternalLink } from "lucide-react";
 import AnimatedAscii from "@/components/animated-ascii";
+import { track } from "@vercel/analytics";
 
 function AuthSuccessContent() {
   const searchParams = useSearchParams();
@@ -29,6 +30,7 @@ function AuthSuccessContent() {
       try {
         console.log("Auto-redirecting to:", callbackUrl.toString());
         window.location.href = callbackUrl.toString();
+        track("auth_success_page_loaded");
         setAutoRedirected(true);
       } catch (error) {
         console.log("Auto redirect failed:", error);
@@ -43,12 +45,18 @@ function AuthSuccessContent() {
       await navigator.clipboard.writeText(callbackUrl.toString());
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+
+      // Track copy action
+      track("auth_code_copied");
     } catch (err) {
       console.error("Failed to copy:", err);
     }
   };
 
   const handleManualRedirect = () => {
+    // Track manual redirect
+    track("auth_manual_redirect");
+
     window.location.href = callbackUrl.toString();
   };
 
@@ -72,19 +80,19 @@ function AuthSuccessContent() {
             border: "8px solid transparent",
             borderRadius: "8px",
             backgroundImage: `url("data:image/svg+xml,%3Csvg width='8' height='8' viewBox='0 0 8 8' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='1' height='1' x='0' y='0' fill='${encodeURIComponent(
-              "#16a34a",
+              "#16a34a"
             )}'/%3E%3Crect width='1' height='1' x='2' y='1' fill='${encodeURIComponent(
-              "#16a34a",
+              "#16a34a"
             )}'/%3E%3Crect width='1' height='1' x='4' y='2' fill='${encodeURIComponent(
-              "#16a34a",
+              "#16a34a"
             )}'/%3E%3Crect width='1' height='1' x='6' y='3' fill='${encodeURIComponent(
-              "#16a34a",
+              "#16a34a"
             )}'/%3E%3Crect width='1' height='1' x='1' y='4' fill='${encodeURIComponent(
-              "#16a34a",
+              "#16a34a"
             )}'/%3E%3Crect width='1' height='1' x='3' y='5' fill='${encodeURIComponent(
-              "#16a34a",
+              "#16a34a"
             )}'/%3E%3Crect width='1' height='1' x='5' y='6' fill='${encodeURIComponent(
-              "#16a34a",
+              "#16a34a"
             )}'/%3E%3Crect width='1' height='1' x='7' y='7' fill='${encodeURIComponent("#16a34a")}'/%3E%3C/svg%3E")`,
             backgroundClip: "border-box",
             WebkitMask:

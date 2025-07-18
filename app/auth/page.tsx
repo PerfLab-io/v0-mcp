@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/form";
 import { ExternalLink, Shield, Key } from "lucide-react";
 import AnimatedAscii from "@/components/animated-ascii";
+import { track } from "@vercel/analytics";
 
 const formSchema = z.object({
   v0_api_key: z.string().min(1, "V0 API key is required"),
@@ -110,6 +111,8 @@ function AuthContent() {
   }
 
   function handleCancel() {
+    track("auth_cancelled");
+
     const cancelUrl = new URL(redirectUri);
     cancelUrl.searchParams.set("error", "access_denied");
     if (state) cancelUrl.searchParams.set("state", state);
@@ -136,19 +139,19 @@ function AuthContent() {
             border: "8px solid transparent",
             borderRadius: "8px",
             backgroundImage: `url("data:image/svg+xml,%3Csvg width='8' height='8' viewBox='0 0 8 8' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='1' height='1' x='0' y='0' fill='${encodeURIComponent(
-              "#374151",
+              "#374151"
             )}'/%3E%3Crect width='1' height='1' x='2' y='1' fill='${encodeURIComponent(
-              "#374151",
+              "#374151"
             )}'/%3E%3Crect width='1' height='1' x='4' y='2' fill='${encodeURIComponent(
-              "#374151",
+              "#374151"
             )}'/%3E%3Crect width='1' height='1' x='6' y='3' fill='${encodeURIComponent(
-              "#374151",
+              "#374151"
             )}'/%3E%3Crect width='1' height='1' x='1' y='4' fill='${encodeURIComponent(
-              "#374151",
+              "#374151"
             )}'/%3E%3Crect width='1' height='1' x='3' y='5' fill='${encodeURIComponent(
-              "#374151",
+              "#374151"
             )}'/%3E%3Crect width='1' height='1' x='5' y='6' fill='${encodeURIComponent(
-              "#374151",
+              "#374151"
             )}'/%3E%3Crect width='1' height='1' x='7' y='7' fill='${encodeURIComponent("#374151")}'/%3E%3C/svg%3E")`,
             backgroundClip: "border-box",
             WebkitMask:
