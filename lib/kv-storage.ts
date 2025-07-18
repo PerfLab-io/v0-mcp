@@ -6,6 +6,8 @@ import { promisify } from "util";
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
 
+const byteSize = (str: string) => new Blob([str]).size;
+
 // Metadata wrapper for gzipped data
 interface KVDataWrapper {
   data: string;
@@ -23,7 +25,7 @@ export interface KVStorage {
   put(
     key: string,
     value: any,
-    options?: { expirationTtl?: number; isGzip?: boolean },
+    options?: { expirationTtl?: number; isGzip?: boolean }
   ): Promise<void>;
   delete(key: string): Promise<void>;
   list(options?: { prefix?: string }): Promise<string[]>;
@@ -41,7 +43,7 @@ export class OAuthKV implements KVStorage {
   async put(
     key: string,
     value: any,
-    options?: { expirationTtl?: number },
+    options?: { expirationTtl?: number }
   ): Promise<void> {
     const fullKey = `${this.prefix}${key}`;
     if (options?.expirationTtl) {
@@ -96,14 +98,16 @@ export class ApiKV implements KVStorage {
   async put(
     key: string,
     value: any,
-    options?: { expirationTtl?: number; isGzip?: boolean },
+    options?: { expirationTtl?: number }
   ): Promise<void> {
     const fullKey = `${this.prefix}${key}`;
     let dataToStore: KVDataWrapper;
+    const jsonString = JSON.stringify(value);
 
-    if (options?.isGzip) {
+    const shouldCompress = byteSize(jsonString) > 500; // Compress if larger than 500 bytes
+
+    if (shouldCompress) {
       // Compress the data
-      const jsonString = JSON.stringify(value);
       const compressed = await gzipAsync(Buffer.from(jsonString));
       dataToStore = {
         data: compressed.toString("base64"),
@@ -112,7 +116,7 @@ export class ApiKV implements KVStorage {
     } else {
       // Store without compression
       dataToStore = {
-        data: JSON.stringify(value),
+        data: jsonString,
         isGzip: false,
       };
     }
@@ -147,7 +151,7 @@ export class SessionKV implements KVStorage {
   async put(
     key: string,
     value: any,
-    options?: { expirationTtl?: number },
+    options?: { expirationTtl?: number }
   ): Promise<void> {
     const fullKey = `${this.prefix}${key}`;
     if (options?.expirationTtl) {

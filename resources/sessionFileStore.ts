@@ -18,7 +18,7 @@ class SessionFileStore {
     sessionId: string,
     chatId: string,
     files: V0File[],
-    messageId?: string,
+    messageId?: string
   ): Promise<SessionFile[]> {
     // Update last chat ID
     await this.setLastChatId(sessionId, chatId);
@@ -33,7 +33,7 @@ class SessionFileStore {
 
       // Check if file already exists in session
       const existingFile = sessionFileList.find(
-        (sf) => sf.file.source === file.source && sf.file.lang === file.lang,
+        (sf) => sf.file.source === file.source && sf.file.lang === file.lang
       );
 
       if (!existingFile) {
@@ -80,7 +80,7 @@ class SessionFileStore {
 
   async getChatFiles(
     sessionId: string,
-    chatId: string,
+    chatId: string
   ): Promise<SessionFile[]> {
     const sessionFiles = await this.getSessionFiles(sessionId);
     return sessionFiles.filter((file) => file.chatId === chatId);
@@ -148,13 +148,8 @@ class SessionFileStore {
         updatedAt: new Date(),
       };
 
-      // Calculate size of session data to decide whether to compress
-      const dataSize = JSON.stringify(sessionData).length;
-      const shouldCompress = dataSize > 500; // Compress if larger than 500 bytes
-
       await API_KV.put(`session:${sessionId}:data`, sessionData, {
         expirationTtl: 60 * 60 * 24 * 7, // 7 days TTL
-        isGzip: shouldCompress,
       });
     } catch (error) {
       console.error("Failed to cache session data:", error);
@@ -164,7 +159,7 @@ class SessionFileStore {
   private async loadSessionData(sessionId: string): Promise<void> {
     try {
       const sessionData = (await API_KV.get(
-        `session:${sessionId}:data`,
+        `session:${sessionId}:data`
       )) as SessionData | null;
 
       if (sessionData) {
