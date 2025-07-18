@@ -2,6 +2,7 @@ import { z } from "zod";
 import { sessionFileStore } from "@/resources/sessionFileStore";
 import { sessionApiKeyStore } from "./client";
 import { handleApiKeyError } from "@/lib/error-handler";
+import { getChatById } from "./getChatById";
 
 export const listFilesSchema = z.object({
   chatId: z.string().optional().describe("Filter files by specific chat ID"),
@@ -45,6 +46,20 @@ export async function listFiles(inputs: z.infer<typeof listFilesSchema>) {
     // Apply filters
     if (effectiveChatId) {
       files = files.filter((file) => file.chatId === effectiveChatId);
+    }
+
+    // If no files found for the chatId (either provided or last), fetch from v0 API
+    if (effectiveChatId && files.length === 0) {
+      try {
+        // Fetch the full chat info and populate sessionfilestore
+        await getChatById({ chatId: effectiveChatId });
+        // Re-fetch files after populating from API
+        files = await sessionFileStore.getSessionFiles(sessionId);
+        files = files.filter((file) => file.chatId === effectiveChatId);
+      } catch (fetchError) {
+        // If fetching fails, we'll continue with empty results
+        console.warn(`Failed to fetch chat ${effectiveChatId} from v0 API:`, fetchError);
+      }
     }
 
     if (inputs.language) {

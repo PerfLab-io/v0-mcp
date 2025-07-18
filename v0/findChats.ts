@@ -35,7 +35,7 @@ export async function findChats(inputs: z.infer<typeof findChatsSchema>) {
     chat.latestVersion
       ? `Latest Version: ${chat.latestVersion.id} (${chat.latestVersion.status})`
       : ""
-  }`,
+  }`
       )
       .join("\n\n");
 

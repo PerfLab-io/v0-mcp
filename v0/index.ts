@@ -5,4 +5,5 @@ export { createMessage, createMessageSchema } from "./createMessage";
 export { findChats, findChatsSchema } from "./findChats";
 export { favoriteChat, favoriteChatSchema } from "./favoriteChat";
 export { listFiles, listFilesSchema } from "./listFiles";
+export { getChatById, getChatByIdSchema } from "./getChatById";
 export { v0ClientManager } from "./client";

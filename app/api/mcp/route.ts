@@ -10,6 +10,7 @@ import {
   findChats,
   favoriteChat,
   listFiles,
+  getChatById,
 } from "@/v0/index";
 import { sessionFileStore } from "@/resources/sessionFileStore";
 import { getMimeType } from "@/lib/utils";
@@ -243,6 +244,21 @@ export async function POST(request: NextRequest) {
                   },
                 },
               },
+              {
+                name: "get_chat_by_id",
+                description:
+                  "Retrieve a specific v0 chat by ID and populate sessionfilestore with its files",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    chatId: {
+                      type: "string",
+                      description: "The ID of the chat to retrieve",
+                    },
+                  },
+                  required: ["chatId"],
+                },
+              },
             ],
           },
         });
@@ -275,6 +291,9 @@ export async function POST(request: NextRequest) {
               break;
             case "list_files":
               result = await listFiles(args);
+              break;
+            case "get_chat_by_id":
+              result = await getChatById(args);
               break;
             default:
               throw new Error(`Unknown tool: ${toolName}`);
