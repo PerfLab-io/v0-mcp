@@ -148,8 +148,13 @@ class SessionFileStore {
         updatedAt: new Date(),
       };
 
+      // Calculate size of session data to decide whether to compress
+      const dataSize = JSON.stringify(sessionData).length;
+      const shouldCompress = dataSize > 500; // Compress if larger than 500 bytes
+
       await API_KV.put(`session:${sessionId}:data`, sessionData, {
         expirationTtl: 60 * 60 * 24 * 7, // 7 days TTL
+        isGzip: shouldCompress,
       });
     } catch (error) {
       console.error("Failed to cache session data:", error);

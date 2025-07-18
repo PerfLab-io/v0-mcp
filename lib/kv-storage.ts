@@ -1,5 +1,16 @@
 import { Redis } from "@upstash/redis";
 import { serverEnv } from "./env.server";
+import { gzip, gunzip } from "node:zlib";
+import { promisify } from "util";
+
+const gzipAsync = promisify(gzip);
+const gunzipAsync = promisify(gunzip);
+
+// Metadata wrapper for gzipped data
+interface KVDataWrapper {
+  data: string;
+  isGzip: boolean;
+}
 
 const redis = new Redis({
   url: serverEnv.KV_REST_API_URL,
@@ -12,7 +23,7 @@ export interface KVStorage {
   put(
     key: string,
     value: any,
-    options?: { expirationTtl?: number },
+    options?: { expirationTtl?: number; isGzip?: boolean },
   ): Promise<void>;
   delete(key: string): Promise<void>;
   list(options?: { prefix?: string }): Promise<string[]>;
@@ -57,19 +68,59 @@ export class ApiKV implements KVStorage {
 
   async get<T = any>(key: string): Promise<T | null> {
     const result = await redis.get(`${this.prefix}${key}`);
-    return result as T | null;
+    if (!result) return null;
+
+    // Check if result is a wrapped object with gzip metadata
+    if (
+      typeof result === "object" &&
+      result !== null &&
+      "data" in result &&
+      "isGzip" in result
+    ) {
+      const wrapped = result as KVDataWrapper;
+      if (wrapped.isGzip) {
+        // Decompress the data
+        const compressedBuffer = Buffer.from(wrapped.data, "base64");
+        const decompressed = await gunzipAsync(compressedBuffer);
+        return JSON.parse(decompressed.toString()) as T;
+      } else {
+        // Data is not compressed, parse directly
+        return JSON.parse(wrapped.data) as T;
+      }
+    } else {
+      // Legacy format - return as-is
+      return result as T;
+    }
   }
 
   async put(
     key: string,
     value: any,
-    options?: { expirationTtl?: number },
+    options?: { expirationTtl?: number; isGzip?: boolean },
   ): Promise<void> {
     const fullKey = `${this.prefix}${key}`;
-    if (options?.expirationTtl) {
-      await redis.setex(fullKey, options.expirationTtl, JSON.stringify(value));
+    let dataToStore: KVDataWrapper;
+
+    if (options?.isGzip) {
+      // Compress the data
+      const jsonString = JSON.stringify(value);
+      const compressed = await gzipAsync(Buffer.from(jsonString));
+      dataToStore = {
+        data: compressed.toString("base64"),
+        isGzip: true,
+      };
     } else {
-      await redis.set(fullKey, JSON.stringify(value));
+      // Store without compression
+      dataToStore = {
+        data: JSON.stringify(value),
+        isGzip: false,
+      };
+    }
+
+    if (options?.expirationTtl) {
+      await redis.setex(fullKey, options.expirationTtl, dataToStore);
+    } else {
+      await redis.set(fullKey, dataToStore);
     }
   }
 
