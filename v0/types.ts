@@ -9,6 +9,8 @@ export type ChatFindResponse = Awaited<ReturnType<typeof v0.chats.find>>;
 export type ChatFavoriteResponse = Awaited<
   ReturnType<typeof v0.chats.favorite>
 >;
+export type ChatInitResponse = Awaited<ReturnType<typeof v0.chats.init>>;
+export type ChatGetByIdResponse = Awaited<ReturnType<typeof v0.chats.getById>>;
 
 // Extract file types from the responses
 export type V0File = NonNullable<ChatCreateResponse["files"]>[number];

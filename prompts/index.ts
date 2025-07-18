@@ -94,6 +94,33 @@ export const v0Prompts = [
       },
     ],
   },
+  {
+    name: "init_v0_chat_from_files",
+    title: "Initialize V0 Chat from Files",
+    description: "Guide for initializing a V0 chat from existing files. The MCP client should ask the user what directories, files, or file patterns to grep and send over.",
+    arguments: [
+      {
+        name: "directories",
+        description: "One or more directory paths to scan for files (comma-separated)",
+        required: false,
+      },
+      {
+        name: "files",
+        description: "One or more specific file paths to include (comma-separated)",
+        required: false,
+      },
+      {
+        name: "file_patterns",
+        description: "File patterns to match (e.g., '*.js,*.ts,*.jsx,*.tsx,*.py,*.go')",
+        required: false,
+      },
+      {
+        name: "privacy",
+        description: "Chat privacy setting (public, private, team-edit, team, unlisted)",
+        required: false,
+      },
+    ],
+  },
 ];
 
 // Prompt content generators
@@ -112,6 +139,8 @@ export async function getPromptContent(
       return generateProjectSetupPrompt(args);
     case "v0_chat_delete":
       return generateChatDeletePrompt(args);
+    case "init_v0_chat_from_files":
+      return generateInitChatFromFilesPrompt(args);
     default:
       throw new Error(`Unknown prompt: ${name}`);
   }
@@ -452,6 +481,103 @@ function generateChatDeletePrompt(args: Record<string, any>) {
 - Ensure proper permissions for deletion
 
 Ready to delete? Use the delete_chat tool with the chat_id of the chat you want to delete!`,
+    },
+  };
+}
+
+function generateInitChatFromFilesPrompt(args: Record<string, any>) {
+  const directories = args.directories;
+  const files = args.files;
+  const filePatterns = args.file_patterns;
+  const privacy = args.privacy || "private";
+
+  return {
+    role: "user" as const,
+    content: {
+      type: "text" as const,
+      text: `You are about to initialize a V0 chat from existing files. As the MCP client, you should ask the user what directories, files, or file patterns to grep and send over.
+
+## Initialize V0 Chat from Files Guide
+
+### 1. Ask the User for File Sources
+
+**IMPORTANT: As the MCP client, you should ask the user:**
+
+"What would you like to include in your V0 chat? Please specify:
+- **Directories**: Which directories should I scan for files? (e.g., \`./src\`, \`./components\`, \`./lib\`)
+- **Specific Files**: Any specific files to include? (e.g., \`./README.md\`, \`./package.json\`)
+- **File Patterns**: What file types? (e.g., \`*.js,*.ts,*.jsx,*.tsx\` for JavaScript/TypeScript, \`*.py\` for Python, \`*.go\` for Go)
+- **Privacy**: Should this be a private chat? (default: private)"
+
+### 2. Collect and Process Files
+
+Once the user provides the information, use grep, find, or similar tools to collect the file contents:
+
+${directories ? `**Directories to scan**: ${directories}` : ""}
+${files ? `**Specific files**: ${files}` : ""}
+${filePatterns ? `**File patterns**: ${filePatterns}` : ""}
+
+### 3. Prepare File Content
+
+For each file you collect:
+- Read the file content
+- Prepare it in the format needed for the init_chat tool
+- Include the file name and full content
+
+### 4. Use the init_chat Tool
+
+After collecting all files, call the init_chat tool:
+
+\`\`\`json
+{
+  "files": [
+    {
+      "name": "src/components/App.tsx",
+      "content": "// File content here..."
+    },
+    {
+      "name": "package.json",
+      "content": "{ /* package.json content */ }"
+    }
+  ],
+  "chatPrivacy": "${privacy}"
+}
+\`\`\`
+
+### 5. File Collection Examples:
+
+**For a React/Next.js project:**
+- Directories: \`./src\`, \`./components\`, \`./pages\`, \`./app\`
+- Patterns: \`*.tsx,*.ts,*.jsx,*.js,*.css\`
+- Key files: \`package.json\`, \`tsconfig.json\`, \`README.md\`
+
+**For a Python project:**
+- Directories: \`./src\`, \`./app\`, \`./lib\`
+- Patterns: \`*.py\`
+- Key files: \`requirements.txt\`, \`pyproject.toml\`, \`README.md\`
+
+**For a Go project:**
+- Directories: \`./cmd\`, \`./pkg\`, \`./internal\`
+- Patterns: \`*.go\`
+- Key files: \`go.mod\`, \`go.sum\`, \`README.md\`
+
+### 6. Best Practices:
+
+- **Ask First**: Always ask the user what they want to include
+- **Be Selective**: Don't include node_modules, .git, or other large directories
+- **Size Limits**: Be mindful of file sizes - V0 has content limits
+- **Relevant Files**: Focus on source code and configuration files
+- **Privacy**: Default to private unless the user specifies otherwise
+
+### 7. Example Workflow:
+
+1. Ask user: "What directories/files/patterns should I include?"
+2. Use grep/find tools to collect matching files
+3. Read file contents and prepare the files array
+4. Call init_chat with the collected files
+5. Confirm successful chat creation
+
+Ready to start? Ask the user what files they want to include in their V0 chat!`,
     },
   };
 }

@@ -11,6 +11,7 @@ import {
   favoriteChat,
   listFiles,
   getChatById,
+  initChat,
 } from "@/v0/index";
 import { sessionFileStore } from "@/resources/sessionFileStore";
 import { getMimeType } from "@/lib/utils";
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
           headers: {
             "WWW-Authenticate": `Bearer error="invalid_token", error_description="No authorization provided", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`,
           },
-        },
+        }
       );
     }
 
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
           error: "invalid_token",
           error_description: "Invalid access token",
         },
-        { status: 401 },
+        { status: 401 }
       );
     }
 
@@ -60,14 +61,14 @@ export async function POST(request: NextRequest) {
           error: "invalid_token",
           error_description: "Access token expired",
         },
-        { status: 401 },
+        { status: 401 }
       );
     }
 
     // Decrypt API key
     const decryptedApiKey = decryptApiKey(
       tokenData.encryptedApiKey,
-      tokenData.clientId,
+      tokenData.clientId
     );
     sessionApiKeyStore.setSessionApiKey(token, decryptedApiKey);
     sessionApiKeyStore.setCurrentSession(token);
@@ -259,6 +260,56 @@ export async function POST(request: NextRequest) {
                   required: ["chatId"],
                 },
               },
+              {
+                name: "init_chat",
+                description:
+                  "Initialize a new v0 chat with a list of files. Those files and its contents will be used to generate a new chat.",
+                inputSchema: {
+                  type: "object",
+                  properties: {
+                    files: {
+                      type: "array",
+                      description: "Array of files to initialize the chat with",
+                      items: {
+                        type: "object",
+                        properties: {
+                          name: {
+                            type: "string",
+                            description: "The name of the file",
+                          },
+                          content: {
+                            type: "string",
+                            description:
+                              "The content of the file (use this OR url, not both)",
+                          },
+                          url: {
+                            type: "string",
+                            description:
+                              "The URL of the file (use this OR content, not both)",
+                          },
+                        },
+                        required: ["name"],
+                      },
+                    },
+                    chatPrivacy: {
+                      type: "string",
+                      enum: [
+                        "public",
+                        "private",
+                        "team-edit",
+                        "team",
+                        "unlisted",
+                      ],
+                      description: "Chat privacy setting",
+                    },
+                    projectId: {
+                      type: "string",
+                      description: "Project ID to associate with the chat",
+                    },
+                  },
+                  required: ["files"],
+                },
+              },
             ],
           },
         });
@@ -294,6 +345,9 @@ export async function POST(request: NextRequest) {
               break;
             case "get_chat_by_id":
               result = await getChatById(args);
+              break;
+            case "init_chat":
+              result = await initChat(args);
               break;
             default:
               throw new Error(`Unknown tool: ${toolName}`);
@@ -477,7 +531,7 @@ export async function POST(request: NextRequest) {
             if (chatId) {
               const chatFiles = await sessionFileStore.getChatFiles(
                 token,
-                chatId,
+                chatId
               );
               const fileList = chatFiles.map((file) => ({
                 id: file.id,
@@ -501,7 +555,7 @@ export async function POST(request: NextRequest) {
                       text: JSON.stringify(
                         { chatId, files: fileList },
                         null,
-                        2,
+                        2
                       ),
                     },
                   ],
@@ -570,7 +624,7 @@ export async function POST(request: NextRequest) {
         },
         id: null,
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
