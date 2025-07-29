@@ -163,14 +163,20 @@ class SessionFileStore {
       )) as SessionData | null;
 
       if (sessionData) {
-        this.sessionFiles.set(sessionId, sessionData.files);
+        // Convert date strings back to Date objects for files
+        const filesWithDates = sessionData.files.map((file) => ({
+          ...file,
+          createdAt: new Date(file.createdAt), // Convert string back to Date
+        }));
+
+        this.sessionFiles.set(sessionId, filesWithDates);
 
         if (sessionData.lastChatId) {
           this.lastChatIds.set(sessionId, sessionData.lastChatId);
         }
 
-        // Rebuild file index
-        for (const file of sessionData.files) {
+        // Rebuild file index with converted files
+        for (const file of filesWithDates) {
           this.fileIndex.set(file.uri, file);
         }
       }

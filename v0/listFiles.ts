@@ -81,13 +81,27 @@ export async function listFiles(inputs: z.infer<typeof listFilesSchema>) {
         const lines = file.file.source.split("\n").length;
         const size = file.file.source.length;
 
+        // Safely handle createdAt - convert to Date if it's a string, or use current date as fallback
+        let createdAtString: string;
+        try {
+          if (file.createdAt instanceof Date) {
+            createdAtString = file.createdAt.toISOString();
+          } else if (typeof file.createdAt === "string") {
+            createdAtString = new Date(file.createdAt).toISOString();
+          } else {
+            createdAtString = new Date().toISOString(); // Fallback to current time
+          }
+        } catch (error) {
+          createdAtString = new Date().toISOString(); // Fallback on any error
+        }
+
         return `📁 ${fileName}
    URI: ${file.uri}
    Language: ${file.file.lang}
    Chat ID: ${file.chatId}
    Lines: ${lines}
    Size: ${size} chars
-   Created: ${file.createdAt.toISOString()}
+   Created: ${createdAtString}
    ${file.messageId ? `Message ID: ${file.messageId}` : ""}`;
       })
       .join("\n\n");
