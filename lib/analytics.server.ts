@@ -65,7 +65,7 @@ export async function trackPromptUsage(promptName: string, sessionId: string) {
 // MCP resource usage tracking
 export async function trackResourceUsage(
   resourceType: string,
-  sessionId: string
+  sessionId: string,
 ) {
   try {
     await track("mcp_resource_usage", {

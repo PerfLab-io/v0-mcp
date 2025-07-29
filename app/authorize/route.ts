@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
   if (!client_id || !redirect_uri || !code_challenge) {
     return NextResponse.json(
       { error: "Missing required parameters" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
   authUrl.searchParams.set("code_challenge", code_challenge);
   authUrl.searchParams.set(
     "code_challenge_method",
-    code_challenge_method || "S256"
+    code_challenge_method || "S256",
   );
   authUrl.searchParams.set("scope", scope || "mcp:tools mcp:resources");
   if (state) authUrl.searchParams.set("state", state);
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     await trackAuthFailure(clientId, "missing_api_key");
     return NextResponse.json(
       { error: "V0 API key is required" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
       codeChallenge,
       codeChallengeMethod,
       scope,
-      v0ApiKey
+      v0ApiKey,
     );
 
     const redirectUrl = new URL(redirectUri);
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
     console.error("Authorization error:", error);
     return NextResponse.json(
       { error: "Authorization failed" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
