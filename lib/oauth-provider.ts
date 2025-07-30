@@ -327,12 +327,14 @@ export class V0OAuthProvider {
     return {
       resource: baseUrl,
       authorization_servers: [authServerUrl],
-      scopes_supported: ["mcp:tools", "mcp:resources"],
+      scopes_supported: ["mcp:tools", "mcp:resources", "mcp:prompts"],
       bearer_methods_supported: ["header"],
+      resource_name: "v0-mcp Server",
       resource_documentation:
         "https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization",
-      resource_policy_uri: `${baseUrl}/privacy-policy`,
-      resource_tos_uri: `${baseUrl}/terms-of-service`,
+      resource_policy_uri: `${baseUrl.replace('/api/mcp', '')}/privacy-policy`,
+      resource_tos_uri: `${baseUrl.replace('/api/mcp', '')}/terms-of-service`,
+      tls_client_certificate_bound_access_tokens: false,
     };
   }
 }
