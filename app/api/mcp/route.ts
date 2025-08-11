@@ -23,6 +23,8 @@ import {
   trackSessionStart,
   trackError,
 } from "@/lib/analytics.server";
+import { mcpLogger } from "@/lib/mcp-logging";
+import { LogLevel, isValidLogLevel } from "@/types/mcp-logging";
 
 // Simple MCP server implementation
 export async function POST(request: NextRequest) {
@@ -43,7 +45,7 @@ export async function POST(request: NextRequest) {
           headers: {
             "WWW-Authenticate": `Bearer error="invalid_token", error_description="No authorization provided", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`,
           },
-        },
+        }
       );
     }
 
@@ -57,7 +59,7 @@ export async function POST(request: NextRequest) {
           error: "invalid_token",
           error_description: "Invalid access token",
         },
-        { status: 401 },
+        { status: 401 }
       );
     }
 
@@ -68,14 +70,14 @@ export async function POST(request: NextRequest) {
           error: "invalid_token",
           error_description: "Access token expired",
         },
-        { status: 401 },
+        { status: 401 }
       );
     }
 
     // Decrypt API key
     const decryptedApiKey = decryptApiKey(
       tokenData.encryptedApiKey,
-      tokenData.clientId,
+      tokenData.clientId
     );
     sessionApiKeyStore.setSessionApiKey(token, decryptedApiKey);
     sessionApiKeyStore.setCurrentSession(token);
@@ -112,6 +114,7 @@ export async function POST(request: NextRequest) {
               prompts: {
                 listChanged: false,
               },
+              logging: {},
             },
             serverInfo: {
               name: "v0-mcp",
@@ -127,6 +130,50 @@ export async function POST(request: NextRequest) {
           id,
           result: {},
         });
+
+      case "logging/setLevel":
+        try {
+          const { level } = params as { level: string };
+
+          if (!level || !isValidLogLevel(level)) {
+            return NextResponse.json({
+              jsonrpc: "2.0",
+              id,
+              error: {
+                code: -32602,
+                message: `Invalid log level: ${level}. Valid levels: emergency, alert, critical, error, warning, notice, info, debug`,
+              },
+            });
+          }
+
+          // Use token as session ID
+          const sessionId = token;
+          await mcpLogger.setLogLevel(sessionId, level as LogLevel);
+
+          // Log the level change
+          await mcpLogger.info(sessionId, "mcp-server", {
+            message: "Log level changed",
+            newLevel: level,
+            timestamp: new Date().toISOString(),
+          });
+
+          return NextResponse.json({
+            jsonrpc: "2.0",
+            id,
+            result: {},
+          });
+        } catch (error: any) {
+          await trackError("logging_setlevel_failed", token);
+          return NextResponse.json({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: -32603,
+              message: "Failed to set log level",
+              data: error.message,
+            },
+          });
+        }
 
       case "tools/list":
         return NextResponse.json({
@@ -332,6 +379,14 @@ export async function POST(request: NextRequest) {
           // Track tool usage
           await trackToolUsage(toolName, token);
 
+          // Log tool execution start
+          await mcpLogger.debug(token, "tool-execution", {
+            message: "Tool execution started",
+            toolName,
+            args: Object.keys(args),
+            timestamp: new Date().toISOString(),
+          });
+
           let result;
 
           switch (toolName) {
@@ -366,6 +421,13 @@ export async function POST(request: NextRequest) {
               throw new Error(`Unknown tool: ${toolName}`);
           }
 
+          // Log successful tool execution
+          await mcpLogger.info(token, "tool-execution", {
+            message: "Tool execution completed successfully",
+            toolName,
+            timestamp: new Date().toISOString(),
+          });
+
           return NextResponse.json({
             jsonrpc: "2.0",
             id,
@@ -377,6 +439,15 @@ export async function POST(request: NextRequest) {
           });
         } catch (error: any) {
           await trackError("tool_execution_failed", toolName);
+
+          // Log tool execution error
+          await mcpLogger.error(token, "tool-execution", {
+            message: "Tool execution failed",
+            toolName,
+            error: error.message,
+            timestamp: new Date().toISOString(),
+          });
+
           return NextResponse.json({
             jsonrpc: "2.0",
             id,
@@ -433,7 +504,7 @@ export async function POST(request: NextRequest) {
         } catch (error: any) {
           await trackError(
             "prompt_generation_failed",
-            params?.name || "unknown",
+            params?.name || "unknown"
           );
           return NextResponse.json({
             jsonrpc: "2.0",
@@ -560,7 +631,7 @@ export async function POST(request: NextRequest) {
             if (chatId) {
               const chatFiles = await sessionFileStore.getChatFiles(
                 token,
-                chatId,
+                chatId
               );
               const fileList = chatFiles.map((file) => ({
                 id: file.id,
@@ -584,7 +655,7 @@ export async function POST(request: NextRequest) {
                       text: JSON.stringify(
                         { chatId, files: fileList },
                         null,
-                        2,
+                        2
                       ),
                     },
                   ],
@@ -654,7 +725,7 @@ export async function POST(request: NextRequest) {
         },
         id: null,
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
