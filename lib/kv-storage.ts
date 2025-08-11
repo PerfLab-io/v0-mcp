@@ -209,8 +209,14 @@ export class LoggingKV implements KVStorage {
     return this.get(`config:${sessionId}`);
   }
 
-  async setConfig(sessionId: string, config: any, ttlSeconds?: number): Promise<void> {
-    return this.put(`config:${sessionId}`, config, { expirationTtl: ttlSeconds });
+  async setConfig(
+    sessionId: string,
+    config: any,
+    ttlSeconds?: number,
+  ): Promise<void> {
+    return this.put(`config:${sessionId}`, config, {
+      expirationTtl: ttlSeconds,
+    });
   }
 
   async updateLevel(sessionId: string, level: string): Promise<void> {

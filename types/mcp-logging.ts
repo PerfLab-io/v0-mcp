@@ -5,7 +5,7 @@ export enum LogLevel {
   EMERGENCY = "emergency",
   ALERT = "alert",
   CRITICAL = "critical",
-  ERROR = "error", 
+  ERROR = "error",
   WARNING = "warning",
   NOTICE = "notice",
   INFO = "info",
@@ -65,12 +65,20 @@ export function isValidLogLevel(level: string): level is LogLevel {
   return Object.values(LogLevel).includes(level as LogLevel);
 }
 
-export function shouldLogAtLevel(messageLevel: LogLevel, sessionMinLevel: LogLevel): boolean {
-  return LOG_LEVEL_PRIORITY[messageLevel] <= LOG_LEVEL_PRIORITY[sessionMinLevel];
+export function shouldLogAtLevel(
+  messageLevel: LogLevel,
+  sessionMinLevel: LogLevel,
+): boolean {
+  return (
+    LOG_LEVEL_PRIORITY[messageLevel] <= LOG_LEVEL_PRIORITY[sessionMinLevel]
+  );
 }
 
 // Default logging configuration
-export const DEFAULT_LOGGING_CONFIG: Omit<LoggingConfig, "sessionId" | "createdAt" | "updatedAt"> = {
+export const DEFAULT_LOGGING_CONFIG: Omit<
+  LoggingConfig,
+  "sessionId" | "createdAt" | "updatedAt"
+> = {
   minLevel: LogLevel.INFO,
   rateLimit: {
     maxMessages: 100,

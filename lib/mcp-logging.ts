@@ -1,12 +1,12 @@
 // Core MCP Logging Implementation
-import { 
-  LogLevel, 
-  LoggingConfig, 
-  MCPLogMessage, 
+import {
+  LogLevel,
+  LoggingConfig,
+  MCPLogMessage,
   LogNotification,
   DEFAULT_LOGGING_CONFIG,
   isValidLogLevel,
-  shouldLogAtLevel
+  shouldLogAtLevel,
 } from "@/types/mcp-logging";
 import { LOGGING_KV } from "@/lib/kv-storage";
 import { rateLimiter, RateLimiter } from "@/lib/rate-limiter";
@@ -15,7 +15,7 @@ import { redactSensitiveData } from "@/lib/log-filters";
 export class MCPLogger {
   constructor(
     private loggingKV = LOGGING_KV,
-    private rateLimiterInstance?: RateLimiter
+    private rateLimiterInstance?: RateLimiter,
   ) {}
 
   private get rateLimiter(): RateLimiter {
@@ -32,7 +32,7 @@ export class MCPLogger {
 
     // Get existing config or create default
     let config = await this.loggingKV.getConfig(sessionId);
-    
+
     if (!config) {
       config = this.createDefaultConfig(sessionId);
     }
@@ -49,10 +49,10 @@ export class MCPLogger {
    * Log a message if it meets the session's minimum level and rate limits
    */
   async log(
-    sessionId: string, 
-    level: LogLevel, 
-    logger: string = "mcp-server", 
-    data: any
+    sessionId: string,
+    level: LogLevel,
+    logger: string = "mcp-server",
+    data: any,
   ): Promise<boolean> {
     try {
       // Get session config
@@ -67,7 +67,7 @@ export class MCPLogger {
       const rateLimitOk = await this.rateLimiter.checkRateLimit(
         sessionId,
         config.rateLimit.maxMessages,
-        config.rateLimit.windowMs
+        config.rateLimit.windowMs,
       );
 
       if (!rateLimitOk) {
@@ -76,7 +76,7 @@ export class MCPLogger {
           const warningNotification = this.createLogNotification(
             LogLevel.WARNING,
             "mcp-logger",
-            { message: "Rate limit exceeded for logging", sessionId }
+            { message: "Rate limit exceeded for logging", sessionId },
           );
           this.sendNotification(warningNotification);
         }
@@ -92,7 +92,7 @@ export class MCPLogger {
 
       return true;
     } catch (error) {
-      console.error('MCPLogger.log failed:', error);
+      console.error("MCPLogger.log failed:", error);
       return false;
     }
   }
@@ -105,7 +105,7 @@ export class MCPLogger {
       const config = await this.getSessionConfig(sessionId);
       return shouldLogAtLevel(level, config.minLevel);
     } catch (error) {
-      console.error('MCPLogger.shouldLog failed:', error);
+      console.error("MCPLogger.shouldLog failed:", error);
       // Default to INFO level when error occurs
       return shouldLogAtLevel(level, LogLevel.INFO);
     }
@@ -122,15 +122,15 @@ export class MCPLogger {
    * Update rate limiting configuration for a session
    */
   async updateRateLimit(
-    sessionId: string, 
-    maxMessages: number, 
-    windowMs: number
+    sessionId: string,
+    maxMessages: number,
+    windowMs: number,
   ): Promise<void> {
     const config = await this.getSessionConfig(sessionId);
-    
+
     config.rateLimit = { maxMessages, windowMs };
     config.updatedAt = new Date().toISOString();
-    
+
     await this.loggingKV.setConfig(sessionId, config, 86400);
   }
 
@@ -149,7 +149,11 @@ export class MCPLogger {
     return this.log(sessionId, LogLevel.NOTICE, logger, data);
   }
 
-  async warning(sessionId: string, logger: string, data: any): Promise<boolean> {
+  async warning(
+    sessionId: string,
+    logger: string,
+    data: any,
+  ): Promise<boolean> {
     return this.log(sessionId, LogLevel.WARNING, logger, data);
   }
 
@@ -157,7 +161,11 @@ export class MCPLogger {
     return this.log(sessionId, LogLevel.ERROR, logger, data);
   }
 
-  async critical(sessionId: string, logger: string, data: any): Promise<boolean> {
+  async critical(
+    sessionId: string,
+    logger: string,
+    data: any,
+  ): Promise<boolean> {
     return this.log(sessionId, LogLevel.CRITICAL, logger, data);
   }
 
@@ -165,7 +173,11 @@ export class MCPLogger {
     return this.log(sessionId, LogLevel.ALERT, logger, data);
   }
 
-  async emergency(sessionId: string, logger: string, data: any): Promise<boolean> {
+  async emergency(
+    sessionId: string,
+    logger: string,
+    data: any,
+  ): Promise<boolean> {
     return this.log(sessionId, LogLevel.EMERGENCY, logger, data);
   }
 
@@ -174,19 +186,19 @@ export class MCPLogger {
    */
   private async getSessionConfig(sessionId: string): Promise<LoggingConfig> {
     let config = await this.loggingKV.getConfig(sessionId);
-    
+
     if (!config) {
       config = this.createDefaultConfig(sessionId);
       // Save default config with TTL
       await this.loggingKV.setConfig(sessionId, config, 86400);
     }
-    
+
     return config;
   }
 
   private createDefaultConfig(sessionId: string): LoggingConfig {
     const now = new Date().toISOString();
-    
+
     return {
       sessionId,
       ...DEFAULT_LOGGING_CONFIG,
@@ -196,9 +208,9 @@ export class MCPLogger {
   }
 
   private createLogNotification(
-    level: LogLevel, 
-    logger: string, 
-    data: any
+    level: LogLevel,
+    logger: string,
+    data: any,
   ): LogNotification {
     return {
       jsonrpc: "2.0",
@@ -215,8 +227,8 @@ export class MCPLogger {
     // In the actual MCP server implementation, this would send the notification
     // to the client via the established transport (HTTP, WebSocket, etc.)
     // For now, we'll just log to console for debugging
-    console.log('MCP Log Notification:', JSON.stringify(notification, null, 2));
-    
+    console.log("MCP Log Notification:", JSON.stringify(notification, null, 2));
+
     // TODO: Integrate with actual MCP transport layer
     // This will be handled in the route.ts integration
   }
@@ -227,8 +239,8 @@ export class MCPLogger {
   async getSessionStats(sessionId: string): Promise<any> {
     const config = await this.getSessionConfig(sessionId);
     const rateLimitStatus = await this.rateLimiter.getRateLimitStatus(
-      sessionId, 
-      config.rateLimit.windowMs
+      sessionId,
+      config.rateLimit.windowMs,
     );
 
     return {
@@ -238,13 +250,13 @@ export class MCPLogger {
     };
   }
 
-  async cleanup(olderThanMs: number = 86400000): Promise<{ 
-    configsCleaned: number; 
-    rateLimitsCleaned: number; 
+  async cleanup(olderThanMs: number = 86400000): Promise<{
+    configsCleaned: number;
+    rateLimitsCleaned: number;
   }> {
     const [configsCleaned, rateLimitsCleaned] = await Promise.all([
       this.loggingKV.cleanup(olderThanMs),
-      this.rateLimiter.cleanup(olderThanMs)
+      this.rateLimiter.cleanup(olderThanMs),
     ]);
 
     return { configsCleaned, rateLimitsCleaned };
