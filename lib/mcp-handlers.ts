@@ -68,7 +68,12 @@ function createSuccessResponse(id: number, result: any): MCPSuccess {
 }
 
 // Create error response
-function createErrorResponse(id: number, code: number, message: string, data?: any): MCPError {
+function createErrorResponse(
+  id: number,
+  code: number,
+  message: string,
+  data?: any
+): MCPError {
   return {
     jsonrpc: "2.0",
     id,
@@ -242,7 +247,8 @@ export const handleToolsList: MCPHandler = async (context) => {
             },
             isFavorite: {
               type: "boolean",
-              description: "Whether to favorite (true) or unfavorite (false) the chat",
+              description:
+                "Whether to favorite (true) or unfavorite (false) the chat",
             },
           },
           required: ["chatId", "isFavorite"],
@@ -250,7 +256,8 @@ export const handleToolsList: MCPHandler = async (context) => {
       },
       {
         name: "list_files",
-        description: "List all files generated in the current session from V0 chats and messages",
+        description:
+          "List all files generated in the current session from V0 chats and messages",
         inputSchema: {
           type: "object",
           properties: {
@@ -271,7 +278,8 @@ export const handleToolsList: MCPHandler = async (context) => {
       },
       {
         name: "get_chat_by_id",
-        description: "Retrieve a specific v0 chat by ID and populate sessionfilestore with its files",
+        description:
+          "Retrieve a specific v0 chat by ID and populate sessionfilestore with its files",
         inputSchema: {
           type: "object",
           properties: {
@@ -285,7 +293,8 @@ export const handleToolsList: MCPHandler = async (context) => {
       },
       {
         name: "init_chat",
-        description: "Initialize a new v0 chat from existing files. If not provided by the user, ask what directory or list of files you should get the contents of to send over.",
+        description:
+          "Initialize a new v0 chat from existing files. If not provided by the user, ask what directory or list of files you should get the contents of to send over.",
         inputSchema: {
           type: "object",
           properties: {
@@ -301,11 +310,13 @@ export const handleToolsList: MCPHandler = async (context) => {
                   },
                   content: {
                     type: "string",
-                    description: "The content of the file (use this OR url, not both)",
+                    description:
+                      "The content of the file (use this OR url, not both)",
                   },
                   url: {
                     type: "string",
-                    description: "The URL of the file (use this OR content, not both)",
+                    description:
+                      "The URL of the file (use this OR content, not both)",
                   },
                 },
                 required: ["name"],
@@ -362,12 +373,14 @@ export const handleToolsCall: MCPHandler = async (context) => {
         break;
       case "find_chats":
         result = await findChats(args);
+        console.log("findChats result", result);
         break;
       case "favorite_chat":
         result = await favoriteChat(args);
         break;
       case "list_files":
         result = await listFiles(args);
+        console.log("listFiles result", result);
         break;
       case "get_chat_by_id":
         result = await getChatById(args);
@@ -387,9 +400,7 @@ export const handleToolsCall: MCPHandler = async (context) => {
     });
 
     return createSuccessResponse(context.id, {
-      content: [
-        { type: "text", text: JSON.stringify(result.result, null, 2) },
-      ],
+      content: [{ type: "text", text: JSON.stringify(result.result, null, 2) }],
     });
   } catch (error: any) {
     await trackError("tool_execution_failed", toolName);
@@ -442,7 +453,10 @@ export const handlePromptsGet: MCPHandler = async (context) => {
       messages: [promptContent],
     });
   } catch (error: any) {
-    await trackError("prompt_generation_failed", context.params?.name || "unknown");
+    await trackError(
+      "prompt_generation_failed",
+      context.params?.name || "unknown"
+    );
     return createErrorResponse(
       context.id,
       -32603,
@@ -549,7 +563,10 @@ export const handleResourcesRead: MCPHandler = async (context) => {
     if (uri?.startsWith("v0://chats/")) {
       const chatId = uri.split("/").pop();
       if (chatId) {
-        const chatFiles = await sessionFileStore.getChatFiles(context.token, chatId);
+        const chatFiles = await sessionFileStore.getChatFiles(
+          context.token,
+          chatId
+        );
         const fileList = chatFiles.map((file) => ({
           id: file.id,
           filename:
@@ -587,7 +604,11 @@ export const handleResourcesRead: MCPHandler = async (context) => {
       });
     }
 
-    return createErrorResponse(context.id, -32602, `Resource not found: ${uri}`);
+    return createErrorResponse(
+      context.id,
+      -32602,
+      `Resource not found: ${uri}`
+    );
   } catch (error) {
     await trackError("resource_read_failed", "read");
     return createErrorResponse(
@@ -601,7 +622,7 @@ export const handleResourcesRead: MCPHandler = async (context) => {
 
 // Method router - maps MCP methods to their handlers
 export const MCP_HANDLERS: Record<string, MCPHandler> = {
-  "initialize": handleInitialize,
+  initialize: handleInitialize,
   "notifications/initialized": handleNotificationsInitialized,
   "logging/setLevel": handleLoggingSetLevel,
   "tools/list": handleToolsList,
@@ -618,7 +639,7 @@ export async function executeMCPMethod(
   context: MCPHandlerContext
 ): Promise<MCPResponse> {
   const handler = MCP_HANDLERS[method];
-  
+
   if (!handler) {
     return createErrorResponse(context.id, -32601, `Unknown method: ${method}`);
   }

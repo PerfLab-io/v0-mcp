@@ -65,7 +65,7 @@ export async function trackPromptUsage(promptName: string, sessionId: string) {
 // MCP resource usage tracking
 export async function trackResourceUsage(
   resourceType: string,
-  sessionId: string,
+  sessionId: string
 ) {
   try {
     await track("mcp_resource_usage", {
@@ -99,4 +99,58 @@ export async function trackError(errorType: string, context: string) {
   } catch (error) {
     console.error("Failed to track error:", error);
   }
+}
+
+// Client information extraction (generic)
+// Instead of parsing the User-Agent, we simply pass through the client string
+// provided by the connecting client. We still truncate to keep payload sizes small.
+function extractClientString(userAgent: string): string {
+  if (!userAgent) return "unknown";
+  return truncate(userAgent, 128);
+}
+
+// Transport telemetry tracking
+export async function trackTransportUsage(
+  sessionId: string,
+  method: string,
+  transportType: "streaming" | "regular",
+  clientString: string,
+  supportsStreaming: boolean
+) {
+  try {
+    await track("mcp_transport_usage", {
+      sessionId: truncate(sessionId),
+      method: truncate(method),
+      transportType,
+      clientString: truncate(clientString, 128),
+      supportsStreaming,
+    });
+  } catch (error) {
+    console.error("Failed to track transport usage:", error);
+  }
+}
+
+// Streaming capabilities tracking
+export async function trackStreamingCapabilities(
+  sessionId: string,
+  supportsStreaming: boolean,
+  acceptHeader: string,
+  clientString: string
+) {
+  try {
+    await track("mcp_streaming_capabilities", {
+      sessionId: truncate(sessionId),
+      supportsStreaming,
+      acceptHeader: truncate(acceptHeader, 64),
+      clientString: truncate(clientString, 128),
+    });
+  } catch (error) {
+    console.error("Failed to track streaming capabilities:", error);
+  }
+}
+
+// Helper function to extract client info from request headers
+export function getClientInfoFromRequest(request: Request): string {
+  const userAgent = request.headers.get("User-Agent") || "";
+  return extractClientString(userAgent);
 }

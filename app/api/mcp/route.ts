@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { API_KV } from "@/lib/kv-storage";
 import { decryptApiKey } from "@/lib/crypto";
 import { sessionApiKeyStore } from "@/v0/client";
-import { trackSessionStart } from "@/lib/analytics.server";
+import {
+  trackSessionStart,
+  trackTransportUsage,
+  trackStreamingCapabilities,
+  getClientInfoFromRequest,
+} from "@/lib/analytics.server";
 import { sseManager } from "@/lib/sse-manager";
 import { executeMCPMethod, type MCPHandlerContext } from "@/lib/mcp-handlers";
 
@@ -18,13 +23,21 @@ async function createStreamingResponse(
     async start(controller) {
       const encoder = new TextEncoder();
 
+      // Track if controller is already closed
+      let isClosed = false;
+
       // Create a writer interface compatible with SSE manager
       const writer = {
         write: async (data: Uint8Array) => {
-          controller.enqueue(data);
+          if (!isClosed) {
+            controller.enqueue(data);
+          }
         },
         close: async () => {
-          controller.close();
+          if (!isClosed) {
+            controller.close();
+            isClosed = true;
+          }
         },
       };
 
@@ -44,7 +57,7 @@ async function createStreamingResponse(
         const result = await executeMCPMethod(method, context);
 
         // Send the final JSON-RPC response (following MCP streamable HTTP pattern)
-        const responseData = `data: ${JSON.stringify(result)}\\n\\n`;
+        const responseData = `data: ${JSON.stringify(result)}\n\n`;
         await writer.write(encoder.encode(responseData));
 
         // Close the stream (as per MCP specification)
@@ -60,7 +73,7 @@ async function createStreamingResponse(
               message: "Streaming error",
               data: error instanceof Error ? error.message : String(error),
             },
-          })}\\n\\n`;
+          })}\n\n`;
           await writer.write(encoder.encode(errorData));
           await writer.close();
         } catch (closeError) {
@@ -152,6 +165,9 @@ export async function POST(request: NextRequest) {
       id?: number;
     };
 
+    // Extract client information from request headers
+    const clientInfo = getClientInfoFromRequest(request);
+
     // Check if client supports streaming (Accept header includes text/event-stream)
     const acceptHeader = request.headers.get("Accept") || "";
     const supportsStreaming = acceptHeader.includes("text/event-stream");
@@ -161,18 +177,44 @@ export async function POST(request: NextRequest) {
     const shouldStream =
       supportsStreaming && streamableMethods.includes(method);
 
+    // Track streaming capabilities for analytics
+    await trackStreamingCapabilities(
+      token,
+      supportsStreaming,
+      acceptHeader,
+      clientInfo
+    );
+
     console.log("MCP Request:", {
       method,
       params,
       id,
       supportsStreaming,
       shouldStream,
+      client: clientInfo,
     });
 
     // If streaming is requested and supported, create an SSE response
     if (shouldStream) {
+      // Track streaming transport usage
+      await trackTransportUsage(
+        token,
+        method,
+        "streaming",
+        clientInfo,
+        supportsStreaming
+      );
       return createStreamingResponse(body, token, tokenData);
     }
+
+    // Track regular HTTP transport usage
+    await trackTransportUsage(
+      token,
+      method,
+      "regular",
+      clientInfo,
+      supportsStreaming
+    );
 
     // Create handler context for regular HTTP
     const context: MCPHandlerContext = {

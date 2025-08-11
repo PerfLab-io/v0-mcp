@@ -24,6 +24,7 @@ async function testStreamableHTTP() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${sessionToken}`,
         'Accept': 'text/event-stream', // This triggers streamable HTTP
+        'User-Agent': 'Claude Desktop/1.2.3 (Test Client)', // Test client info extraction
       },
       body: JSON.stringify({
         jsonrpc: "2.0",
@@ -147,6 +148,7 @@ async function testTraditionalHTTP() {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${sessionToken}`,
+        'User-Agent': 'curl/8.4.0', // Test different client info
         // No Accept: text/event-stream header
       },
       body: JSON.stringify({
