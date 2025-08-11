@@ -2,9 +2,9 @@ import { z } from "zod";
 import { V0Result, V0ChatFile } from "./types";
 
 export const listFilesSchema = z.object({
-  chatId: z.string().optional(),
-  language: z.string().optional(),
-  includeStats: z.boolean().optional(),
+  chatId: z.string().describe("The chat ID to list files from (required)"),
+  language: z.string().optional().describe("Filter files by programming language (optional)"),
+  includeStats: z.boolean().optional().describe("Include file statistics in the response (optional)"),
 });
 
 export type ListFilesArgs = z.infer<typeof listFilesSchema>;

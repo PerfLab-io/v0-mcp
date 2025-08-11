@@ -257,23 +257,24 @@ export const handleToolsList: MCPHandler = async (context) => {
       {
         name: "list_files",
         description:
-          "List all files generated in the current session from V0 chats and messages",
+          "List files from a specific v0 chat. Automatically fetches files from v0 if not already cached locally. Returns code files, components, and other generated content from the chat.",
         inputSchema: {
           type: "object",
           properties: {
             chatId: {
               type: "string",
-              description: "Filter files by specific chat ID",
+              description: "The chat ID to list files from (required). Use find_chats to discover available chat IDs.",
             },
             language: {
               type: "string",
-              description: "Filter files by programming language",
+              description: "Optional filter by programming language (e.g., 'typescript', 'python', 'jsx', 'css')",
             },
             includeStats: {
               type: "boolean",
-              description: "Include file statistics in response",
+              description: "Include file statistics and metadata in the response (optional, default: false)",
             },
           },
+          required: ["chatId"],
         },
       },
       {
@@ -379,56 +380,68 @@ export const handleToolsCall: MCPHandler = async (context) => {
         result = await favoriteChat(args);
         break;
       case "list_files":
-        // Use sessionFileStore instead of the placeholder v0 listFiles
+        // chatId is now required
+        if (!args.chatId) {
+          throw new Error("chatId is required for list_files");
+        }
+        
         const sessionId = context.token;
         let sessionFiles = await sessionFileStore.getSessionFiles(sessionId);
         
-        // Filter by chatId if provided
-        if (args.chatId) {
-          let chatFiles = sessionFiles.filter(file => file.chatId === args.chatId);
+        // Filter by the required chatId
+        let chatFiles = sessionFiles.filter(file => file.chatId === args.chatId);
+        
+        // If no files found for this chatId, automatically fetch them from v0
+        if (chatFiles.length === 0) {
+          await mcpLogger.debug(context.token, "tool-execution", {
+            message: "No files found for chatId, auto-fetching from v0",
+            chatId: args.chatId,
+            timestamp: new Date().toISOString(),
+          });
           
-          // If no files found for this chatId, try to fetch them from v0
-          if (chatFiles.length === 0) {
-            await mcpLogger.debug(context.token, "tool-execution", {
-              message: "No files found for chatId, fetching from v0",
+          try {
+            // Use getChatById to populate the file store
+            await getChatById({ chatId: args.chatId });
+            
+            // Refresh our session files and filter again
+            sessionFiles = await sessionFileStore.getSessionFiles(sessionId);
+            chatFiles = sessionFiles.filter(file => file.chatId === args.chatId);
+            
+            await mcpLogger.info(context.token, "tool-execution", {
+              message: "Successfully auto-fetched and populated files from v0",
               chatId: args.chatId,
+              filesFound: chatFiles.length,
+              timestamp: new Date().toISOString(),
+            });
+          } catch (fetchError: any) {
+            await mcpLogger.error(context.token, "tool-execution", {
+              message: "Failed to auto-fetch files from v0",
+              chatId: args.chatId,
+              error: fetchError.message,
               timestamp: new Date().toISOString(),
             });
             
-            try {
-              // Use getChatById to populate the file store
-              await getChatById({ chatId: args.chatId });
-              
-              // Refresh our session files and filter again
-              sessionFiles = await sessionFileStore.getSessionFiles(sessionId);
-              chatFiles = sessionFiles.filter(file => file.chatId === args.chatId);
-              
-              await mcpLogger.info(context.token, "tool-execution", {
-                message: "Successfully fetched and populated files from v0",
-                chatId: args.chatId,
-                filesFound: chatFiles.length,
-                timestamp: new Date().toISOString(),
-              });
-            } catch (fetchError: any) {
-              await mcpLogger.error(context.token, "tool-execution", {
-                message: "Failed to fetch files from v0",
-                chatId: args.chatId,
-                error: fetchError.message,
-                timestamp: new Date().toISOString(),
-              });
-            }
+            // Return empty result with error info instead of throwing
+            result = { 
+              success: false,
+              error: `Failed to fetch files for chat ${args.chatId}: ${fetchError.message}`,
+              result: { files: [], chatId: args.chatId },
+              rawResponse: { error: fetchError.message }
+            };
+            console.log("listFiles result (error)", result);
+            break;
           }
-          
-          sessionFiles = chatFiles;
         }
         
         // Filter by language if provided
         if (args.language) {
-          sessionFiles = sessionFiles.filter(file => file.file.lang === args.language);
+          chatFiles = chatFiles.filter(file => 
+            file.file.lang.toLowerCase() === args.language.toLowerCase()
+          );
         }
         
         // Format the files for the response
-        const files = sessionFiles.map(file => ({
+        const files = chatFiles.map(file => ({
           id: file.id,
           filename: file.file.meta?.filename || `${file.file.lang}_file_${file.id.slice(-8)}`,
           language: file.file.lang,
@@ -439,8 +452,19 @@ export const handleToolsCall: MCPHandler = async (context) => {
           messageId: file.messageId,
         }));
         
+        // Build response data
+        const responseData: any = { 
+          files, 
+          chatId: args.chatId,
+          totalFiles: files.length
+        };
+        
+        // Add language filter info if used
+        if (args.language) {
+          responseData.filteredByLanguage = args.language;
+        }
+        
         // Include stats if requested
-        const responseData: any = { files };
         if (args.includeStats) {
           const stats = await sessionFileStore.getFileStats(sessionId);
           responseData.stats = stats;
