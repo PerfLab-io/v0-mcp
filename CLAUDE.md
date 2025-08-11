@@ -65,11 +65,13 @@ The server exposes v0.dev capabilities through MCP tools:
 - Includes OTEL telemetry for usage analytics and intelligence gathering
 
 ## Important Notes
+
 - Use pnpm for package management
 - AVOID superfluous comments, only add comments when better context is needed for complex operations
 - Ask what PRP(s) should we be focusing for the session
 
 ### **Required Reading on Session Start**
+
 **ALWAYS** read these files at the beginning of each session to understand current status:
 
 1. **Latest Changelog**: `agentic-context/changelogs/changelog-[MOST-RECENT-DATE].md`
@@ -78,6 +80,7 @@ The server exposes v0.dev capabilities through MCP tools:
 4. **Ad-hoc plannings**: `agentic-context/ad-hoc-planning/*.md` - Where the agent was instructed ad-hoc, aka: without PRP / PRD. Normally for smaller tasks or tasks that are generated as a 'side-quest' from the main goal at hand. Those should always require user aproval before proceeding.
 
 ### **Documentation Requirements**
+
 **AFTER SUCCESSFULLY COMPLETING ANY TASK**, you MUST:
 
 1. **Update/Create Changelog**: `agentic-context/changelogs/changelog-YYYY-MM-DD-HHMMSS.md`
@@ -93,7 +96,9 @@ The server exposes v0.dev capabilities through MCP tools:
    - Include strategic recommendations for future development
 
 ### **File Naming Conventions for changelogs and learnings**
+
 **CRITICAL**: Use date-time format to avoid conflicts when multiple sessions occur on the same day:
+
 - Format: `YYYY-MM-DD-HHMMSS` (e.g., `2025-07-26-143022`)
 - Location: `agentic-context/changelogs/` and `agentic-context/learnings/` directories
 - Always check for existing files and increment appropriately

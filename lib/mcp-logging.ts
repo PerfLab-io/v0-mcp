@@ -224,31 +224,42 @@ export class MCPLogger {
     };
   }
 
-  private async sendNotification(notification: LogNotification, sessionId?: string): Promise<void> {
+  private async sendNotification(
+    notification: LogNotification,
+    sessionId?: string,
+  ): Promise<void> {
     try {
       // Extract session ID from the notification context if available
       if (!sessionId && notification.params?.data?.sessionId) {
         sessionId = notification.params.data.sessionId;
       }
-      
+
       if (!sessionId) {
         console.warn("Cannot send MCP notification: no session ID available");
         return;
       }
-      
+
       // Try to send via active SSE connection first (streamable HTTP)
-      const sentViaSSE = await sseManager.sendNotification(sessionId, notification);
-      
+      const sentViaSSE = await sseManager.sendNotification(
+        sessionId,
+        notification,
+      );
+
       if (sentViaSSE) {
         console.log("MCP Log Notification sent via SSE to session:", sessionId);
       } else {
-        console.log("MCP Log Notification (no active SSE):", JSON.stringify(notification, null, 2));
+        console.log(
+          "MCP Log Notification (no active SSE):",
+          JSON.stringify(notification, null, 2),
+        );
       }
-      
     } catch (error) {
       console.error("Failed to send MCP notification:", error);
       // Fallback to console logging if all else fails
-      console.log("MCP Log Notification (fallback):", JSON.stringify(notification, null, 2));
+      console.log(
+        "MCP Log Notification (fallback):",
+        JSON.stringify(notification, null, 2),
+      );
     }
   }
 

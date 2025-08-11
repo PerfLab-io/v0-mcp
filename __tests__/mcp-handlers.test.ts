@@ -159,9 +159,9 @@ describe("MCP Handlers", () => {
 
       expect(result.result.tools).toBeInstanceOf(Array);
       expect(result.result.tools.length).toBeGreaterThan(0);
-      
+
       const createChatTool = result.result.tools.find(
-        (tool: any) => tool.name === "create_chat"
+        (tool: any) => tool.name === "create_chat",
       );
       expect(createChatTool).toBeDefined();
       expect(createChatTool.description).toContain("Create a new v0 chat");
@@ -213,7 +213,9 @@ describe("MCP Handlers", () => {
     });
 
     it("should handle list_files with required chatId", async () => {
-      const { sessionFileStore } = await import("../resources/sessionFileStore");
+      const { sessionFileStore } = await import(
+        "../resources/sessionFileStore"
+      );
       vi.mocked(sessionFileStore.getSessionFiles).mockResolvedValue([]);
 
       context.params = {
@@ -246,9 +248,9 @@ describe("MCP Handlers", () => {
 
       expect(result.result.prompts).toBeInstanceOf(Array);
       expect(result.result.prompts.length).toBeGreaterThan(0);
-      
+
       const testPrompt = result.result.prompts.find(
-        (prompt: any) => prompt.name === "test-prompt"
+        (prompt: any) => prompt.name === "test-prompt",
       );
       expect(testPrompt).toBeDefined();
     });
@@ -287,7 +289,9 @@ describe("MCP Handlers", () => {
 
   describe("handleResourcesList", () => {
     it("should return list of available resources", async () => {
-      const { sessionFileStore } = await import("../resources/sessionFileStore");
+      const { sessionFileStore } = await import(
+        "../resources/sessionFileStore"
+      );
       vi.mocked(sessionFileStore.getSessionFiles).mockResolvedValue([]);
       vi.mocked(sessionFileStore.getLastChatId).mockResolvedValue(null);
 
@@ -295,9 +299,9 @@ describe("MCP Handlers", () => {
 
       expect(result.result.resources).toBeInstanceOf(Array);
       expect(result.result.resources.length).toBeGreaterThan(0);
-      
+
       const userConfigResource = result.result.resources.find(
-        (resource: any) => resource.uri === "v0://user/config"
+        (resource: any) => resource.uri === "v0://user/config",
       );
       expect(userConfigResource).toBeDefined();
     });
@@ -355,7 +359,9 @@ describe("MCP Handlers", () => {
     });
 
     it("should provide proper error response format", () => {
-      const error = MCPErrors.invalidParams("Missing parameter", { param: "test" });
+      const error = MCPErrors.invalidParams("Missing parameter", {
+        param: "test",
+      });
       const response = error.toMCPResponse(1);
 
       expect(response).toEqual({

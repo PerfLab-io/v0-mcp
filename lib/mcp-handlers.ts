@@ -25,11 +25,11 @@ import {
 } from "@/lib/analytics.server";
 import { mcpLogger } from "@/lib/mcp-logging";
 import { LogLevel, isValidLogLevel } from "@/types/mcp-logging";
-import { 
-  MCPError, 
-  MCPErrors, 
-  withErrorHandling, 
-  validateRequired, 
+import {
+  MCPError,
+  MCPErrors,
+  withErrorHandling,
+  validateRequired,
   validateType,
   validateEnum,
 } from "@/lib/mcp-errors";
@@ -76,10 +76,7 @@ function createSuccessResponse(id: number, result: any): MCPSuccess {
 }
 
 // Create error response using MCP error handling
-function createErrorResponse(
-  id: number,
-  error: MCPError
-): MCPErrorResponse {
+function createErrorResponse(id: number, error: MCPError): MCPErrorResponse {
   return error.toMCPResponse(id) as MCPErrorResponse;
 }
 
@@ -88,7 +85,7 @@ function createLegacyErrorResponse(
   id: number,
   code: number,
   message: string,
-  data?: any
+  data?: any,
 ): MCPErrorResponse {
   const mcpError = new MCPError(code, message, data);
   return mcpError.toMCPResponse(id) as MCPErrorResponse;
@@ -130,13 +127,22 @@ export const handleLoggingSetLevel: MCPHandler = async (context) => {
   return withErrorHandling(
     async () => {
       const { level } = context.params as { level: string };
-      
+
       // Validate required parameter
-      validateRequired(level, 'level');
-      
+      validateRequired(level, "level");
+
       // Validate log level enum
       if (!isValidLogLevel(level)) {
-        const validLevels = ['emergency', 'alert', 'critical', 'error', 'warning', 'notice', 'info', 'debug'];
+        const validLevels = [
+          "emergency",
+          "alert",
+          "critical",
+          "error",
+          "warning",
+          "notice",
+          "info",
+          "debug",
+        ];
         throw MCPErrors.invalidLogLevel(level, validLevels);
       }
 
@@ -156,8 +162,8 @@ export const handleLoggingSetLevel: MCPHandler = async (context) => {
     {
       operationName: "logging/setLevel",
       sessionId: context.token,
-      onError: () => trackError("logging_setlevel_failed", context.token)
-    }
+      onError: () => trackError("logging_setlevel_failed", context.token),
+    },
   );
 };
 
@@ -272,15 +278,18 @@ export const handleToolsList: MCPHandler = async (context) => {
           properties: {
             chatId: {
               type: "string",
-              description: "The chat ID to list files from (required). Use find_chats to discover available chat IDs.",
+              description:
+                "The chat ID to list files from (required). Use find_chats to discover available chat IDs.",
             },
             language: {
               type: "string",
-              description: "Optional filter by programming language (e.g., 'typescript', 'python', 'jsx', 'css')",
+              description:
+                "Optional filter by programming language (e.g., 'typescript', 'python', 'jsx', 'css')",
             },
             includeStats: {
               type: "boolean",
-              description: "Include file statistics and metadata in the response (optional, default: false)",
+              description:
+                "Include file statistics and metadata in the response (optional, default: false)",
             },
           },
           required: ["chatId"],
@@ -353,7 +362,7 @@ export const handleToolsList: MCPHandler = async (context) => {
 export const handleToolsCall: MCPHandler = async (context) => {
   return withErrorHandling(
     async () => {
-      const toolName = validateRequired(context.params?.name, 'name');
+      const toolName = validateRequired(context.params?.name, "name");
       const args = context.params?.arguments || {};
 
       // Track tool usage
@@ -389,109 +398,117 @@ export const handleToolsCall: MCPHandler = async (context) => {
         case "favorite_chat":
           result = await favoriteChat(args);
           break;
-      case "list_files":
-        // chatId is now required
-        const chatId = validateRequired(args.chatId, 'chatId');
-        validateType(chatId, 'string', 'chatId');
-        
-        const sessionId = context.token;
-        let sessionFiles = await sessionFileStore.getSessionFiles(sessionId);
-        
-        // Filter by the required chatId
-        let chatFiles = sessionFiles.filter(file => file.chatId === args.chatId);
-        
-        // If no files found for this chatId, automatically fetch them from v0
-        if (chatFiles.length === 0) {
-          await mcpLogger.debug(context.token, "tool-execution", {
-            message: "No files found for chatId, auto-fetching from v0",
-            chatId: args.chatId,
-            timestamp: new Date().toISOString(),
-          });
-          
-          try {
-            // Use getChatById to populate the file store
-            await getChatById({ chatId: args.chatId });
-            
-            // Refresh our session files and filter again
-            sessionFiles = await sessionFileStore.getSessionFiles(sessionId);
-            chatFiles = sessionFiles.filter(file => file.chatId === args.chatId);
-            
-            await mcpLogger.info(context.token, "tool-execution", {
-              message: "Successfully auto-fetched and populated files from v0",
-              chatId: args.chatId,
-              filesFound: chatFiles.length,
-              timestamp: new Date().toISOString(),
-            });
-          } catch (fetchError: any) {
-            await mcpLogger.error(context.token, "tool-execution", {
-              message: "Failed to auto-fetch files from v0",
-              chatId: args.chatId,
-              error: fetchError.message,
-              timestamp: new Date().toISOString(),
-            });
-            
-            // Return empty result with error info instead of throwing
-            result = { 
-              success: false,
-              error: `Failed to fetch files for chat ${args.chatId}: ${fetchError.message}`,
-              result: { files: [], chatId: args.chatId },
-              rawResponse: { error: fetchError.message }
-            };
-            console.log("listFiles result (error)", result);
-            break;
-          }
-        }
-        
-        // Filter by language if provided
-        if (args.language) {
-          chatFiles = chatFiles.filter(file => 
-            file.file.lang.toLowerCase() === args.language.toLowerCase()
+        case "list_files":
+          // chatId is now required
+          const chatId = validateRequired(args.chatId, "chatId");
+          validateType(chatId, "string", "chatId");
+
+          const sessionId = context.token;
+          let sessionFiles = await sessionFileStore.getSessionFiles(sessionId);
+
+          // Filter by the required chatId
+          let chatFiles = sessionFiles.filter(
+            (file) => file.chatId === args.chatId,
           );
-        }
-        
-        // Format the files for the response
-        const files = chatFiles.map(file => ({
-          id: file.id,
-          filename: file.file.meta?.filename || `${file.file.lang}_file_${file.id.slice(-8)}`,
-          language: file.file.lang,
-          source: file.file.source,
-          chatId: file.chatId,
-          uri: file.uri,
-          createdAt: file.createdAt,
-          messageId: file.messageId,
-        }));
-        
-        // Build response data
-        const responseData: any = { 
-          files, 
-          chatId: args.chatId,
-          totalFiles: files.length
-        };
-        
-        // Add language filter info if used
-        if (args.language) {
-          responseData.filteredByLanguage = args.language;
-        }
-        
-        // Include stats if requested
-        if (args.includeStats) {
-          const stats = await sessionFileStore.getFileStats(sessionId);
-          responseData.stats = stats;
-        }
-        
-        result = { 
-          success: true,
-          result: responseData,
-          rawResponse: responseData
-        };
-        console.log("listFiles result", result);
-        break;
-      case "get_chat_by_id":
-        result = await getChatById(args);
-        break;
-      case "init_chat":
-        result = await initChat(args);
-        break;
+
+          // If no files found for this chatId, automatically fetch them from v0
+          if (chatFiles.length === 0) {
+            await mcpLogger.debug(context.token, "tool-execution", {
+              message: "No files found for chatId, auto-fetching from v0",
+              chatId: args.chatId,
+              timestamp: new Date().toISOString(),
+            });
+
+            try {
+              // Use getChatById to populate the file store
+              await getChatById({ chatId: args.chatId });
+
+              // Refresh our session files and filter again
+              sessionFiles = await sessionFileStore.getSessionFiles(sessionId);
+              chatFiles = sessionFiles.filter(
+                (file) => file.chatId === args.chatId,
+              );
+
+              await mcpLogger.info(context.token, "tool-execution", {
+                message:
+                  "Successfully auto-fetched and populated files from v0",
+                chatId: args.chatId,
+                filesFound: chatFiles.length,
+                timestamp: new Date().toISOString(),
+              });
+            } catch (fetchError: any) {
+              await mcpLogger.error(context.token, "tool-execution", {
+                message: "Failed to auto-fetch files from v0",
+                chatId: args.chatId,
+                error: fetchError.message,
+                timestamp: new Date().toISOString(),
+              });
+
+              // Return empty result with error info instead of throwing
+              result = {
+                success: false,
+                error: `Failed to fetch files for chat ${args.chatId}: ${fetchError.message}`,
+                result: { files: [], chatId: args.chatId },
+                rawResponse: { error: fetchError.message },
+              };
+              console.log("listFiles result (error)", result);
+              break;
+            }
+          }
+
+          // Filter by language if provided
+          if (args.language) {
+            chatFiles = chatFiles.filter(
+              (file) =>
+                file.file.lang.toLowerCase() === args.language.toLowerCase(),
+            );
+          }
+
+          // Format the files for the response
+          const files = chatFiles.map((file) => ({
+            id: file.id,
+            filename:
+              file.file.meta?.filename ||
+              `${file.file.lang}_file_${file.id.slice(-8)}`,
+            language: file.file.lang,
+            source: file.file.source,
+            chatId: file.chatId,
+            uri: file.uri,
+            createdAt: file.createdAt,
+            messageId: file.messageId,
+          }));
+
+          // Build response data
+          const responseData: any = {
+            files,
+            chatId: args.chatId,
+            totalFiles: files.length,
+          };
+
+          // Add language filter info if used
+          if (args.language) {
+            responseData.filteredByLanguage = args.language;
+          }
+
+          // Include stats if requested
+          if (args.includeStats) {
+            const stats = await sessionFileStore.getFileStats(sessionId);
+            responseData.stats = stats;
+          }
+
+          result = {
+            success: true,
+            result: responseData,
+            rawResponse: responseData,
+          };
+          console.log("listFiles result", result);
+          break;
+        case "get_chat_by_id":
+          result = await getChatById(args);
+          break;
+        case "init_chat":
+          result = await initChat(args);
+          break;
         default:
           throw MCPErrors.resourceNotFound("tool", toolName);
       }
@@ -504,22 +521,24 @@ export const handleToolsCall: MCPHandler = async (context) => {
       });
 
       return createSuccessResponse(context.id, {
-        content: [{ type: "text", text: JSON.stringify(result.result, null, 2) }],
+        content: [
+          { type: "text", text: JSON.stringify(result.result, null, 2) },
+        ],
       });
     },
     {
-      operationName: `tools/call:${context.params?.name || 'unknown'}`,
+      operationName: `tools/call:${context.params?.name || "unknown"}`,
       sessionId: context.token,
       onError: (error) => {
-        trackError("tool_execution_failed", context.params?.name || 'unknown');
+        trackError("tool_execution_failed", context.params?.name || "unknown");
         mcpLogger.error(context.token, "tool-execution", {
           message: "Tool execution failed",
           toolName: context.params?.name,
           error: error instanceof Error ? error.message : String(error),
           timestamp: new Date().toISOString(),
         });
-      }
-    }
+      },
+    },
   );
 };
 
@@ -541,7 +560,10 @@ export const handlePromptsGet: MCPHandler = async (context) => {
     const promptArgs = context.params?.arguments || {};
 
     if (!promptName) {
-      return createErrorResponse(context.id, MCPErrors.invalidParams("Missing prompt name"));
+      return createErrorResponse(
+        context.id,
+        MCPErrors.invalidParams("Missing prompt name"),
+      );
     }
 
     // Track prompt usage
@@ -556,11 +578,11 @@ export const handlePromptsGet: MCPHandler = async (context) => {
   } catch (error: any) {
     await trackError(
       "prompt_generation_failed",
-      context.params?.name || "unknown"
+      context.params?.name || "unknown",
     );
     return createErrorResponse(
       context.id,
-      MCPErrors.internalError(error.message || "Failed to generate prompt")
+      MCPErrors.internalError(error.message || "Failed to generate prompt"),
     );
   }
 };
@@ -620,8 +642,8 @@ export const handleResourcesList: MCPHandler = async (context) => {
       context.id,
       MCPErrors.internalError(
         "Failed to list resources",
-        error instanceof Error ? error.message : "Unknown error"
-      )
+        error instanceof Error ? error.message : "Unknown error",
+      ),
     );
   }
 };
@@ -666,7 +688,7 @@ export const handleResourcesRead: MCPHandler = async (context) => {
       if (chatId) {
         const chatFiles = await sessionFileStore.getChatFiles(
           context.token,
-          chatId
+          chatId,
         );
         const fileList = chatFiles.map((file) => ({
           id: file.id,
@@ -707,7 +729,7 @@ export const handleResourcesRead: MCPHandler = async (context) => {
 
     return createErrorResponse(
       context.id,
-      MCPErrors.resourceNotFound("resource", uri)
+      MCPErrors.resourceNotFound("resource", uri),
     );
   } catch (error) {
     await trackError("resource_read_failed", "read");
@@ -715,8 +737,8 @@ export const handleResourcesRead: MCPHandler = async (context) => {
       context.id,
       MCPErrors.internalError(
         "Failed to read resource",
-        error instanceof Error ? error.message : "Unknown error"
-      )
+        error instanceof Error ? error.message : "Unknown error",
+      ),
     );
   }
 };
@@ -737,12 +759,12 @@ export const MCP_HANDLERS: Record<string, MCPHandler> = {
 // Execute MCP method with common error handling
 export async function executeMCPMethod(
   method: string,
-  context: MCPHandlerContext
+  context: MCPHandlerContext,
 ): Promise<MCPResponse> {
   return withErrorHandling(
     async () => {
       const handler = MCP_HANDLERS[method];
-      
+
       if (!handler) {
         throw MCPErrors.methodNotFound(method);
       }
@@ -754,7 +776,7 @@ export async function executeMCPMethod(
       sessionId: context.token,
       onError: (error) => {
         console.error(`MCP Method Error (${method}):`, error);
-      }
-    }
+      },
+    },
   );
 }

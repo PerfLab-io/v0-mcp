@@ -15,7 +15,7 @@ import { executeMCPMethod, type MCPHandlerContext } from "@/lib/mcp-handlers";
 async function createStreamingResponse(
   body: any,
   token: string,
-  tokenData: any
+  tokenData: any,
 ): Promise<Response> {
   const { method, params, id } = body;
 
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
           headers: {
             "WWW-Authenticate": `Bearer error="invalid_token", error_description="No authorization provided", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`,
           },
-        }
+        },
       );
     }
 
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
           error: "invalid_token",
           error_description: "Invalid access token",
         },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -142,14 +142,14 @@ export async function POST(request: NextRequest) {
           error: "invalid_token",
           error_description: "Access token expired",
         },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
     // Decrypt API key
     const decryptedApiKey = decryptApiKey(
       tokenData.encryptedApiKey,
-      tokenData.clientId
+      tokenData.clientId,
     );
     sessionApiKeyStore.setSessionApiKey(token, decryptedApiKey);
     sessionApiKeyStore.setCurrentSession(token);
@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
       token,
       supportsStreaming,
       acceptHeader,
-      clientInfo
+      clientInfo,
     );
 
     console.log("MCP Request:", {
@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
         method,
         "streaming",
         clientInfo,
-        supportsStreaming
+        supportsStreaming,
       );
       return createStreamingResponse(body, token, tokenData);
     }
@@ -213,7 +213,7 @@ export async function POST(request: NextRequest) {
       method,
       "regular",
       clientInfo,
-      supportsStreaming
+      supportsStreaming,
     );
 
     // Create handler context for regular HTTP
@@ -239,7 +239,7 @@ export async function POST(request: NextRequest) {
         },
         id: null,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

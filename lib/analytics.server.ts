@@ -65,7 +65,7 @@ export async function trackPromptUsage(promptName: string, sessionId: string) {
 // MCP resource usage tracking
 export async function trackResourceUsage(
   resourceType: string,
-  sessionId: string
+  sessionId: string,
 ) {
   try {
     await track("mcp_resource_usage", {
@@ -115,7 +115,7 @@ export async function trackTransportUsage(
   method: string,
   transportType: "streaming" | "regular",
   clientString: string,
-  supportsStreaming: boolean
+  supportsStreaming: boolean,
 ) {
   try {
     await track("mcp_transport_usage", {
@@ -135,7 +135,7 @@ export async function trackStreamingCapabilities(
   sessionId: string,
   supportsStreaming: boolean,
   acceptHeader: string,
-  clientString: string
+  clientString: string,
 ) {
   try {
     await track("mcp_streaming_capabilities", {
