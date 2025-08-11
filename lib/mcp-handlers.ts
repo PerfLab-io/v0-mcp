@@ -155,6 +155,7 @@ export const handleLoggingSetLevel: MCPHandler = async (context) => {
     },
     {
       operationName: "logging/setLevel",
+      sessionId: context.token,
       onError: () => trackError("logging_setlevel_failed", context.token)
     }
   );
@@ -508,6 +509,7 @@ export const handleToolsCall: MCPHandler = async (context) => {
     },
     {
       operationName: `tools/call:${context.params?.name || 'unknown'}`,
+      sessionId: context.token,
       onError: (error) => {
         trackError("tool_execution_failed", context.params?.name || 'unknown');
         mcpLogger.error(context.token, "tool-execution", {
@@ -749,6 +751,7 @@ export async function executeMCPMethod(
     },
     {
       operationName: `MCP:${method}`,
+      sessionId: context.token,
       onError: (error) => {
         console.error(`MCP Method Error (${method}):`, error);
       }
