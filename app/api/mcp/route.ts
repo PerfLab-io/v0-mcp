@@ -2,29 +2,88 @@ import { NextRequest, NextResponse } from "next/server";
 import { API_KV } from "@/lib/kv-storage";
 import { decryptApiKey } from "@/lib/crypto";
 import { sessionApiKeyStore } from "@/v0/client";
-import {
-  createChat,
-  getUserInfo,
-  createProject,
-  createMessage,
-  findChats,
-  favoriteChat,
-  listFiles,
-  getChatById,
-  initChat,
-} from "@/v0/index";
-import { sessionFileStore } from "@/resources/sessionFileStore";
-import { getMimeType } from "@/lib/utils";
-import { v0Prompts, getPromptContent } from "@/prompts/index";
-import {
-  trackToolUsage,
-  trackPromptUsage,
-  trackResourceUsage,
-  trackSessionStart,
-  trackError,
-} from "@/lib/analytics.server";
-import { mcpLogger } from "@/lib/mcp-logging";
-import { LogLevel, isValidLogLevel } from "@/types/mcp-logging";
+import { trackSessionStart } from "@/lib/analytics.server";
+import { sseManager } from "@/lib/sse-manager";
+import { executeMCPMethod, type MCPHandlerContext } from "@/lib/mcp-handlers";
+
+// Create streaming response for MCP streamable HTTP transport
+async function createStreamingResponse(
+  body: any,
+  token: string,
+  tokenData: any
+): Promise<Response> {
+  const { method, params, id } = body;
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder();
+
+      // Create a writer interface compatible with SSE manager
+      const writer = {
+        write: async (data: Uint8Array) => {
+          controller.enqueue(data);
+        },
+        close: async () => {
+          controller.close();
+        },
+      };
+
+      try {
+        // Add SSE connection to manager
+        sseManager.addConnection(token, writer);
+
+        // Create handler context
+        const context: MCPHandlerContext = {
+          token,
+          tokenData,
+          params,
+          id,
+        };
+
+        // Execute MCP method using shared handler
+        const result = await executeMCPMethod(method, context);
+
+        // Send the final JSON-RPC response (following MCP streamable HTTP pattern)
+        const responseData = `data: ${JSON.stringify(result)}\\n\\n`;
+        await writer.write(encoder.encode(responseData));
+
+        // Close the stream (as per MCP specification)
+        await writer.close();
+      } catch (error) {
+        console.error("Streaming error:", error);
+        try {
+          const errorData = `data: ${JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            error: {
+              code: -32603,
+              message: "Streaming error",
+              data: error instanceof Error ? error.message : String(error),
+            },
+          })}\\n\\n`;
+          await writer.write(encoder.encode(errorData));
+          await writer.close();
+        } catch (closeError) {
+          console.error("Error closing stream:", closeError);
+        }
+      } finally {
+        // Clean up SSE connection
+        await sseManager.removeConnection(token);
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept",
+    },
+  });
+}
 
 // Simple MCP server implementation
 export async function POST(request: NextRequest) {
@@ -45,7 +104,7 @@ export async function POST(request: NextRequest) {
           headers: {
             "WWW-Authenticate": `Bearer error="invalid_token", error_description="No authorization provided", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`,
           },
-        },
+        }
       );
     }
 
@@ -59,7 +118,7 @@ export async function POST(request: NextRequest) {
           error: "invalid_token",
           error_description: "Invalid access token",
         },
-        { status: 401 },
+        { status: 401 }
       );
     }
 
@@ -70,14 +129,14 @@ export async function POST(request: NextRequest) {
           error: "invalid_token",
           error_description: "Access token expired",
         },
-        { status: 401 },
+        { status: 401 }
       );
     }
 
     // Decrypt API key
     const decryptedApiKey = decryptApiKey(
       tokenData.encryptedApiKey,
-      tokenData.clientId,
+      tokenData.clientId
     );
     sessionApiKeyStore.setSessionApiKey(token, decryptedApiKey);
     sessionApiKeyStore.setCurrentSession(token);
@@ -93,626 +152,39 @@ export async function POST(request: NextRequest) {
       id?: number;
     };
 
-    console.log("MCP Request:", { method, params, id });
+    // Check if client supports streaming (Accept header includes text/event-stream)
+    const acceptHeader = request.headers.get("Accept") || "";
+    const supportsStreaming = acceptHeader.includes("text/event-stream");
 
-    // Handle MCP methods
-    switch (method) {
-      case "initialize":
-        return NextResponse.json({
-          jsonrpc: "2.0",
-          id,
-          result: {
-            protocolVersion: "2025-03-26",
-            capabilities: {
-              resources: {
-                subscribe: false,
-                listChanged: false,
-              },
-              tools: {
-                listChanged: false,
-              },
-              prompts: {
-                listChanged: false,
-              },
-              logging: {},
-            },
-            serverInfo: {
-              name: "v0-mcp",
-              version: "1.0.0",
-            },
-          },
-        });
+    // Methods that could benefit from streaming (generate logs)
+    const streamableMethods = ["logging/setLevel", "tools/call"];
+    const shouldStream =
+      supportsStreaming && streamableMethods.includes(method);
 
-      case "notifications/initialized":
-        // This is a notification, no response needed
-        return NextResponse.json({
-          jsonrpc: "2.0",
-          id,
-          result: {},
-        });
+    console.log("MCP Request:", {
+      method,
+      params,
+      id,
+      supportsStreaming,
+      shouldStream,
+    });
 
-      case "logging/setLevel":
-        try {
-          const { level } = params as { level: string };
-
-          if (!level || !isValidLogLevel(level)) {
-            return NextResponse.json({
-              jsonrpc: "2.0",
-              id,
-              error: {
-                code: -32602,
-                message: `Invalid log level: ${level}. Valid levels: emergency, alert, critical, error, warning, notice, info, debug`,
-              },
-            });
-          }
-
-          // Use token as session ID
-          const sessionId = token;
-          await mcpLogger.setLogLevel(sessionId, level as LogLevel);
-
-          // Log the level change
-          await mcpLogger.info(sessionId, "mcp-server", {
-            message: "Log level changed",
-            newLevel: level,
-            timestamp: new Date().toISOString(),
-          });
-
-          return NextResponse.json({
-            jsonrpc: "2.0",
-            id,
-            result: {},
-          });
-        } catch (error: any) {
-          await trackError("logging_setlevel_failed", token);
-          return NextResponse.json({
-            jsonrpc: "2.0",
-            id,
-            error: {
-              code: -32603,
-              message: "Failed to set log level",
-              data: error.message,
-            },
-          });
-        }
-
-      case "tools/list":
-        return NextResponse.json({
-          jsonrpc: "2.0",
-          id,
-          result: {
-            tools: [
-              {
-                name: "create_chat",
-                description: "Create a new v0 chat session with AI",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    message: {
-                      type: "string",
-                      description: "The message to send to v0",
-                    },
-                  },
-                  required: ["message"],
-                },
-              },
-              {
-                name: "get_user_info",
-                description: "Retrieve user information from v0",
-                inputSchema: {
-                  type: "object",
-                  properties: {},
-                },
-              },
-              {
-                name: "create_project",
-                description: "Create a new project in v0",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    name: {
-                      type: "string",
-                      description: "The name of the project",
-                    },
-                    description: {
-                      type: "string",
-                      description: "The description of the project",
-                    },
-                  },
-                  required: ["name"],
-                },
-              },
-              {
-                name: "create_message",
-                description: "Add a new message to an existing v0 chat",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    chatId: {
-                      type: "string",
-                      description: "The ID of the chat to add a message to",
-                    },
-                    message: {
-                      type: "string",
-                      description: "The message content to send",
-                    },
-                  },
-                  required: ["chatId", "message"],
-                },
-              },
-              {
-                name: "find_chats",
-                description: "Search and list v0 chats with optional filtering",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    limit: {
-                      type: "string",
-                      description: "Maximum number of chats to return",
-                    },
-                    offset: {
-                      type: "string",
-                      description: "Number of chats to skip for pagination",
-                    },
-                    isFavorite: {
-                      type: "string",
-                      description: "Filter by favorite status (true/false)",
-                    },
-                  },
-                },
-              },
-              {
-                name: "favorite_chat",
-                description:
-                  "Mark a v0 chat as favorite or remove from favorites",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    chatId: {
-                      type: "string",
-                      description: "The ID of the chat to favorite/unfavorite",
-                    },
-                    isFavorite: {
-                      type: "boolean",
-                      description:
-                        "Whether to favorite (true) or unfavorite (false) the chat",
-                    },
-                  },
-                  required: ["chatId", "isFavorite"],
-                },
-              },
-              {
-                name: "list_files",
-                description:
-                  "List all files generated in the current session from V0 chats and messages",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    chatId: {
-                      type: "string",
-                      description: "Filter files by specific chat ID",
-                    },
-                    language: {
-                      type: "string",
-                      description: "Filter files by programming language",
-                    },
-                    includeStats: {
-                      type: "boolean",
-                      description: "Include file statistics in response",
-                    },
-                  },
-                },
-              },
-              {
-                name: "get_chat_by_id",
-                description:
-                  "Retrieve a specific v0 chat by ID and populate sessionfilestore with its files",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    chatId: {
-                      type: "string",
-                      description: "The ID of the chat to retrieve",
-                    },
-                  },
-                  required: ["chatId"],
-                },
-              },
-              {
-                name: "init_chat",
-                description:
-                  "Initialize a new v0 chat from existing files. If not provided by the user, ask what directory or list of files you should get the contents of to send over.",
-                inputSchema: {
-                  type: "object",
-                  properties: {
-                    files: {
-                      type: "array",
-                      description: "Array of files to initialize the chat with",
-                      items: {
-                        type: "object",
-                        properties: {
-                          name: {
-                            type: "string",
-                            description: "The name of the file",
-                          },
-                          content: {
-                            type: "string",
-                            description:
-                              "The content of the file (use this OR url, not both)",
-                          },
-                          url: {
-                            type: "string",
-                            description:
-                              "The URL of the file (use this OR content, not both)",
-                          },
-                        },
-                        required: ["name"],
-                      },
-                    },
-                    chatPrivacy: {
-                      type: "string",
-                      enum: [
-                        "public",
-                        "private",
-                        "team-edit",
-                        "team",
-                        "unlisted",
-                      ],
-                      description: "Chat privacy setting",
-                    },
-                    projectId: {
-                      type: "string",
-                      description: "Project ID to associate with the chat",
-                    },
-                  },
-                  required: ["files"],
-                },
-              },
-            ],
-          },
-        });
-
-      case "tools/call":
-        const toolName = params?.name;
-        const args = params?.arguments || {};
-
-        try {
-          // Track tool usage
-          await trackToolUsage(toolName, token);
-
-          // Log tool execution start
-          await mcpLogger.debug(token, "tool-execution", {
-            message: "Tool execution started",
-            toolName,
-            args: Object.keys(args),
-            timestamp: new Date().toISOString(),
-          });
-
-          let result;
-
-          switch (toolName) {
-            case "create_chat":
-              result = await createChat(args);
-              break;
-            case "get_user_info":
-              result = await getUserInfo();
-              break;
-            case "create_project":
-              result = await createProject(args);
-              break;
-            case "create_message":
-              result = await createMessage(args);
-              break;
-            case "find_chats":
-              result = await findChats(args);
-              break;
-            case "favorite_chat":
-              result = await favoriteChat(args);
-              break;
-            case "list_files":
-              result = await listFiles(args);
-              break;
-            case "get_chat_by_id":
-              result = await getChatById(args);
-              break;
-            case "init_chat":
-              result = await initChat(args);
-              break;
-            default:
-              throw new Error(`Unknown tool: ${toolName}`);
-          }
-
-          // Log successful tool execution
-          await mcpLogger.info(token, "tool-execution", {
-            message: "Tool execution completed successfully",
-            toolName,
-            timestamp: new Date().toISOString(),
-          });
-
-          return NextResponse.json({
-            jsonrpc: "2.0",
-            id,
-            result: {
-              content: [
-                { type: "text", text: JSON.stringify(result.result, null, 2) },
-              ],
-            },
-          });
-        } catch (error: any) {
-          await trackError("tool_execution_failed", toolName);
-
-          // Log tool execution error
-          await mcpLogger.error(token, "tool-execution", {
-            message: "Tool execution failed",
-            toolName,
-            error: error.message,
-            timestamp: new Date().toISOString(),
-          });
-
-          return NextResponse.json({
-            jsonrpc: "2.0",
-            id,
-            error: {
-              code: -32603,
-              message: error.message || "Tool execution failed",
-              data: error.stack,
-            },
-          });
-        }
-
-      case "prompts/list":
-        return NextResponse.json({
-          jsonrpc: "2.0",
-          id,
-          result: {
-            prompts: v0Prompts.map((prompt) => ({
-              name: prompt.name,
-              description: prompt.description,
-              arguments: prompt.arguments || [],
-            })),
-          },
-        });
-
-      case "prompts/get":
-        try {
-          const promptName = params?.name;
-          const promptArgs = params?.arguments || {};
-
-          if (!promptName) {
-            return NextResponse.json({
-              jsonrpc: "2.0",
-              id,
-              error: {
-                code: -32602,
-                message: "Missing prompt name",
-              },
-            });
-          }
-
-          // Track prompt usage
-          await trackPromptUsage(promptName, token);
-
-          const promptContent = await getPromptContent(promptName, promptArgs);
-
-          return NextResponse.json({
-            jsonrpc: "2.0",
-            id,
-            result: {
-              description: `Generated prompt for ${promptName}`,
-              messages: [promptContent],
-            },
-          });
-        } catch (error: any) {
-          await trackError(
-            "prompt_generation_failed",
-            params?.name || "unknown",
-          );
-          return NextResponse.json({
-            jsonrpc: "2.0",
-            id,
-            error: {
-              code: -32603,
-              message: error.message || "Failed to generate prompt",
-            },
-          });
-        }
-
-      case "resources/list":
-        try {
-          const token = authHeader.substring(7);
-
-          // Track resource usage
-          await trackResourceUsage("list", token);
-
-          const sessionFiles = await sessionFileStore.getSessionFiles(token);
-          const lastChatId = await sessionFileStore.getLastChatId(token);
-
-          const resources = [
-            {
-              uri: "v0://user/config",
-              name: "v0 User Configuration",
-              description: "User configuration and settings from v0",
-              mimeType: "application/json",
-            },
-            {
-              uri: "v0://session/stats",
-              name: "Session File Statistics",
-              description: "Statistics about files generated in this session",
-              mimeType: "application/json",
-            },
-          ];
-
-          // Add last chat resources if available
-          if (lastChatId) {
-            resources.push({
-              uri: `v0://chats/${lastChatId}`,
-              name: `Chat ${lastChatId} Files`,
-              description: `Files from the last interacted chat (${lastChatId})`,
-              mimeType: "application/json",
-            });
-          }
-
-          // Add individual file resources
-          for (const sessionFile of sessionFiles) {
-            const filename =
-              sessionFile.file.meta?.filename ||
-              `${sessionFile.file.lang}_file_${sessionFile.id.slice(-8)}`;
-
-            resources.push({
-              uri: sessionFile.uri,
-              name: filename,
-              description: `${sessionFile.file.lang} file from chat ${sessionFile.chatId}`,
-              mimeType: getMimeType(sessionFile.file.lang),
-            });
-          }
-
-          return NextResponse.json({
-            jsonrpc: "2.0",
-            id,
-            result: { resources },
-          });
-        } catch (error) {
-          await trackError("resource_list_failed", "list");
-          return NextResponse.json({
-            jsonrpc: "2.0",
-            id,
-            error: {
-              code: -32603,
-              message: "Failed to list resources",
-              data: error instanceof Error ? error.message : "Unknown error",
-            },
-          });
-        }
-
-      case "resources/read":
-        try {
-          const uri = params?.uri;
-          const token = authHeader.substring(7);
-
-          // Track resource usage
-          await trackResourceUsage("read", token);
-
-          if (uri === "v0://user/config") {
-            const userInfo = await getUserInfo();
-            return NextResponse.json({
-              jsonrpc: "2.0",
-              id,
-              result: {
-                contents: [
-                  {
-                    uri,
-                    mimeType: "application/json",
-                    text: JSON.stringify(userInfo.rawResponse, null, 2),
-                  },
-                ],
-              },
-            });
-          }
-
-          if (uri === "v0://session/stats") {
-            const stats = await sessionFileStore.getFileStats(token);
-            return NextResponse.json({
-              jsonrpc: "2.0",
-              id,
-              result: {
-                contents: [
-                  {
-                    uri,
-                    mimeType: "application/json",
-                    text: JSON.stringify(stats, null, 2),
-                  },
-                ],
-              },
-            });
-          }
-
-          // Handle chat files
-          if (uri?.startsWith("v0://chats/")) {
-            const chatId = uri.split("/").pop();
-            if (chatId) {
-              const chatFiles = await sessionFileStore.getChatFiles(
-                token,
-                chatId,
-              );
-              const fileList = chatFiles.map((file) => ({
-                id: file.id,
-                filename:
-                  file.file.meta?.filename ||
-                  `${file.file.lang}_file_${file.id.slice(-8)}`,
-                language: file.file.lang,
-                uri: file.uri,
-                createdAt: file.createdAt,
-                messageId: file.messageId,
-              }));
-
-              return NextResponse.json({
-                jsonrpc: "2.0",
-                id,
-                result: {
-                  contents: [
-                    {
-                      uri,
-                      mimeType: "application/json",
-                      text: JSON.stringify(
-                        { chatId, files: fileList },
-                        null,
-                        2,
-                      ),
-                    },
-                  ],
-                },
-              });
-            }
-          }
-
-          // Handle individual file content
-          const sessionFile = sessionFileStore.getFileByUri(uri);
-          if (sessionFile) {
-            return NextResponse.json({
-              jsonrpc: "2.0",
-              id,
-              result: {
-                contents: [
-                  {
-                    uri,
-                    mimeType: getMimeType(sessionFile.file.lang),
-                    text: sessionFile.file.source,
-                  },
-                ],
-              },
-            });
-          }
-
-          return NextResponse.json({
-            jsonrpc: "2.0",
-            id,
-            error: {
-              code: -32602,
-              message: `Resource not found: ${uri}`,
-            },
-          });
-        } catch (error) {
-          await trackError("resource_read_failed", "read");
-          return NextResponse.json({
-            jsonrpc: "2.0",
-            id,
-            error: {
-              code: -32603,
-              message: "Failed to read resource",
-              data: error instanceof Error ? error.message : "Unknown error",
-            },
-          });
-        }
-
-      default:
-        return NextResponse.json({
-          jsonrpc: "2.0",
-          id,
-          error: {
-            code: -32601,
-            message: `Unknown method: ${method}`,
-          },
-        });
+    // If streaming is requested and supported, create an SSE response
+    if (shouldStream) {
+      return createStreamingResponse(body, token, tokenData);
     }
+
+    // Create handler context for regular HTTP
+    const context: MCPHandlerContext = {
+      token,
+      tokenData,
+      params,
+      id: id || 0,
+    };
+
+    // Execute MCP method using shared handler
+    const result = await executeMCPMethod(method, context);
+    return NextResponse.json(result);
   } catch (error: any) {
     console.error("MCP Server Error:", error);
     return NextResponse.json(
@@ -725,7 +197,7 @@ export async function POST(request: NextRequest) {
         },
         id: null,
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

@@ -11,6 +11,7 @@ import {
 import { LOGGING_KV } from "@/lib/kv-storage";
 import { rateLimiter, RateLimiter } from "@/lib/rate-limiter";
 import { redactSensitiveData } from "@/lib/log-filters";
+import { sseManager } from "@/lib/sse-manager";
 
 export class MCPLogger {
   constructor(
@@ -78,7 +79,7 @@ export class MCPLogger {
             "mcp-logger",
             { message: "Rate limit exceeded for logging", sessionId },
           );
-          this.sendNotification(warningNotification);
+          this.sendNotification(warningNotification, sessionId);
         }
         return false;
       }
@@ -88,7 +89,7 @@ export class MCPLogger {
 
       // Create and send log notification
       const notification = this.createLogNotification(level, logger, safeData);
-      await this.sendNotification(notification);
+      await this.sendNotification(notification, sessionId);
 
       return true;
     } catch (error) {
@@ -223,14 +224,32 @@ export class MCPLogger {
     };
   }
 
-  private async sendNotification(notification: LogNotification): Promise<void> {
-    // In the actual MCP server implementation, this would send the notification
-    // to the client via the established transport (HTTP, WebSocket, etc.)
-    // For now, we'll just log to console for debugging
-    console.log("MCP Log Notification:", JSON.stringify(notification, null, 2));
-
-    // TODO: Integrate with actual MCP transport layer
-    // This will be handled in the route.ts integration
+  private async sendNotification(notification: LogNotification, sessionId?: string): Promise<void> {
+    try {
+      // Extract session ID from the notification context if available
+      if (!sessionId && notification.params?.data?.sessionId) {
+        sessionId = notification.params.data.sessionId;
+      }
+      
+      if (!sessionId) {
+        console.warn("Cannot send MCP notification: no session ID available");
+        return;
+      }
+      
+      // Try to send via active SSE connection first (streamable HTTP)
+      const sentViaSSE = await sseManager.sendNotification(sessionId, notification);
+      
+      if (sentViaSSE) {
+        console.log("MCP Log Notification sent via SSE to session:", sessionId);
+      } else {
+        console.log("MCP Log Notification (no active SSE):", JSON.stringify(notification, null, 2));
+      }
+      
+    } catch (error) {
+      console.error("Failed to send MCP notification:", error);
+      // Fallback to console logging if all else fails
+      console.log("MCP Log Notification (fallback):", JSON.stringify(notification, null, 2));
+    }
   }
 
   /**

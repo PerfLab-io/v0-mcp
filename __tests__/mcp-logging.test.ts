@@ -36,6 +36,17 @@ vi.mock("@/lib/rate-limiter", () => ({
   },
 }));
 
+vi.mock("@/lib/sse-manager", () => ({
+  sseManager: {
+    addConnection: vi.fn(),
+    removeConnection: vi.fn(),
+    sendNotification: vi.fn().mockResolvedValue(false), // No active connections by default
+    hasConnection: vi.fn().mockReturnValue(false),
+    getStats: vi.fn(),
+    cleanup: vi.fn(),
+  },
+}));
+
 describe("MCP Logging Types", () => {
   test("validates log levels correctly", () => {
     expect(isValidLogLevel("debug")).toBe(true);
@@ -290,7 +301,7 @@ describe("MCPLogger", () => {
     await logger.log("session1", LogLevel.INFO, "auth", sensitiveData);
 
     expect(consoleSpy).toHaveBeenCalledWith(
-      "MCP Log Notification:",
+      "MCP Log Notification (no active SSE):",
       expect.stringContaining("[REDACTED]"),
     );
 
