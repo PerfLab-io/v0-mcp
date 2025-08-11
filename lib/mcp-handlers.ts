@@ -25,6 +25,14 @@ import {
 } from "@/lib/analytics.server";
 import { mcpLogger } from "@/lib/mcp-logging";
 import { LogLevel, isValidLogLevel } from "@/types/mcp-logging";
+import { 
+  MCPError, 
+  MCPErrors, 
+  withErrorHandling, 
+  validateRequired, 
+  validateType,
+  validateEnum,
+} from "@/lib/mcp-errors";
 
 // MCP Response types
 export interface MCPSuccess {
@@ -33,7 +41,7 @@ export interface MCPSuccess {
   result: any;
 }
 
-export interface MCPError {
+export interface MCPErrorResponse {
   jsonrpc: "2.0";
   id: number;
   error: {
@@ -43,7 +51,7 @@ export interface MCPError {
   };
 }
 
-export type MCPResponse = MCPSuccess | MCPError;
+export type MCPResponse = MCPSuccess | MCPErrorResponse;
 
 // Handler context - contains common data needed by all handlers
 export interface MCPHandlerContext {
@@ -67,22 +75,23 @@ function createSuccessResponse(id: number, result: any): MCPSuccess {
   };
 }
 
-// Create error response
+// Create error response using MCP error handling
 function createErrorResponse(
+  id: number,
+  error: MCPError
+): MCPErrorResponse {
+  return error.toMCPResponse(id) as MCPErrorResponse;
+}
+
+// Legacy function for backward compatibility
+function createLegacyErrorResponse(
   id: number,
   code: number,
   message: string,
   data?: any
-): MCPError {
-  return {
-    jsonrpc: "2.0",
-    id,
-    error: {
-      code,
-      message,
-      data,
-    },
-  };
+): MCPErrorResponse {
+  const mcpError = new MCPError(code, message, data);
+  return mcpError.toMCPResponse(id) as MCPErrorResponse;
 }
 
 // Initialize handler
@@ -118,38 +127,37 @@ export const handleNotificationsInitialized: MCPHandler = async (context) => {
 
 // Logging/setLevel handler
 export const handleLoggingSetLevel: MCPHandler = async (context) => {
-  try {
-    const { level } = context.params as { level: string };
+  return withErrorHandling(
+    async () => {
+      const { level } = context.params as { level: string };
+      
+      // Validate required parameter
+      validateRequired(level, 'level');
+      
+      // Validate log level enum
+      if (!isValidLogLevel(level)) {
+        const validLevels = ['emergency', 'alert', 'critical', 'error', 'warning', 'notice', 'info', 'debug'];
+        throw MCPErrors.invalidLogLevel(level, validLevels);
+      }
 
-    if (!level || !isValidLogLevel(level)) {
-      return createErrorResponse(
-        context.id,
-        -32602,
-        `Invalid log level: ${level}. Valid levels: emergency, alert, critical, error, warning, notice, info, debug`
-      );
+      // Use token as session ID
+      const sessionId = context.token;
+      await mcpLogger.setLogLevel(sessionId, level as LogLevel);
+
+      // Log the level change
+      await mcpLogger.info(sessionId, "mcp-server", {
+        message: "Log level changed",
+        newLevel: level,
+        timestamp: new Date().toISOString(),
+      });
+
+      return createSuccessResponse(context.id, {});
+    },
+    {
+      operationName: "logging/setLevel",
+      onError: () => trackError("logging_setlevel_failed", context.token)
     }
-
-    // Use token as session ID
-    const sessionId = context.token;
-    await mcpLogger.setLogLevel(sessionId, level as LogLevel);
-
-    // Log the level change
-    await mcpLogger.info(sessionId, "mcp-server", {
-      message: "Log level changed",
-      newLevel: level,
-      timestamp: new Date().toISOString(),
-    });
-
-    return createSuccessResponse(context.id, {});
-  } catch (error: any) {
-    await trackError("logging_setlevel_failed", context.token);
-    return createErrorResponse(
-      context.id,
-      -32603,
-      "Failed to set log level",
-      error.message
-    );
-  }
+  );
 };
 
 // Tools/list handler
@@ -342,48 +350,48 @@ export const handleToolsList: MCPHandler = async (context) => {
 
 // Tools/call handler
 export const handleToolsCall: MCPHandler = async (context) => {
-  const toolName = context.params?.name;
-  const args = context.params?.arguments || {};
+  return withErrorHandling(
+    async () => {
+      const toolName = validateRequired(context.params?.name, 'name');
+      const args = context.params?.arguments || {};
 
-  try {
-    // Track tool usage
-    await trackToolUsage(toolName, context.token);
+      // Track tool usage
+      await trackToolUsage(toolName, context.token);
 
-    // Log tool execution start
-    await mcpLogger.debug(context.token, "tool-execution", {
-      message: "Tool execution started",
-      toolName,
-      args: Object.keys(args),
-      timestamp: new Date().toISOString(),
-    });
+      // Log tool execution start
+      await mcpLogger.debug(context.token, "tool-execution", {
+        message: "Tool execution started",
+        toolName,
+        args: Object.keys(args),
+        timestamp: new Date().toISOString(),
+      });
 
-    let result;
+      let result;
 
-    switch (toolName) {
-      case "create_chat":
-        result = await createChat(args);
-        break;
-      case "get_user_info":
-        result = await getUserInfo();
-        break;
-      case "create_project":
-        result = await createProject(args);
-        break;
-      case "create_message":
-        result = await createMessage(args);
-        break;
-      case "find_chats":
-        result = await findChats(args);
-        console.log("findChats result", result);
-        break;
-      case "favorite_chat":
-        result = await favoriteChat(args);
-        break;
+      switch (toolName) {
+        case "create_chat":
+          result = await createChat(args);
+          break;
+        case "get_user_info":
+          result = await getUserInfo();
+          break;
+        case "create_project":
+          result = await createProject(args);
+          break;
+        case "create_message":
+          result = await createMessage(args);
+          break;
+        case "find_chats":
+          result = await findChats(args);
+          console.log("findChats result", result);
+          break;
+        case "favorite_chat":
+          result = await favoriteChat(args);
+          break;
       case "list_files":
         // chatId is now required
-        if (!args.chatId) {
-          throw new Error("chatId is required for list_files");
-        }
+        const chatId = validateRequired(args.chatId, 'chatId');
+        validateType(chatId, 'string', 'chatId');
         
         const sessionId = context.token;
         let sessionFiles = await sessionFileStore.getSessionFiles(sessionId);
@@ -483,38 +491,34 @@ export const handleToolsCall: MCPHandler = async (context) => {
       case "init_chat":
         result = await initChat(args);
         break;
-      default:
-        throw new Error(`Unknown tool: ${toolName}`);
+        default:
+          throw MCPErrors.resourceNotFound("tool", toolName);
+      }
+
+      // Log successful tool execution
+      await mcpLogger.info(context.token, "tool-execution", {
+        message: "Tool execution completed successfully",
+        toolName,
+        timestamp: new Date().toISOString(),
+      });
+
+      return createSuccessResponse(context.id, {
+        content: [{ type: "text", text: JSON.stringify(result.result, null, 2) }],
+      });
+    },
+    {
+      operationName: `tools/call:${context.params?.name || 'unknown'}`,
+      onError: (error) => {
+        trackError("tool_execution_failed", context.params?.name || 'unknown');
+        mcpLogger.error(context.token, "tool-execution", {
+          message: "Tool execution failed",
+          toolName: context.params?.name,
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
-
-    // Log successful tool execution
-    await mcpLogger.info(context.token, "tool-execution", {
-      message: "Tool execution completed successfully",
-      toolName,
-      timestamp: new Date().toISOString(),
-    });
-
-    return createSuccessResponse(context.id, {
-      content: [{ type: "text", text: JSON.stringify(result.result, null, 2) }],
-    });
-  } catch (error: any) {
-    await trackError("tool_execution_failed", toolName);
-
-    // Log tool execution error
-    await mcpLogger.error(context.token, "tool-execution", {
-      message: "Tool execution failed",
-      toolName,
-      error: error.message,
-      timestamp: new Date().toISOString(),
-    });
-
-    return createErrorResponse(
-      context.id,
-      -32603,
-      error.message || "Tool execution failed",
-      error.stack
-    );
-  }
+  );
 };
 
 // Prompts/list handler
@@ -535,7 +539,7 @@ export const handlePromptsGet: MCPHandler = async (context) => {
     const promptArgs = context.params?.arguments || {};
 
     if (!promptName) {
-      return createErrorResponse(context.id, -32602, "Missing prompt name");
+      return createErrorResponse(context.id, MCPErrors.invalidParams("Missing prompt name"));
     }
 
     // Track prompt usage
@@ -554,8 +558,7 @@ export const handlePromptsGet: MCPHandler = async (context) => {
     );
     return createErrorResponse(
       context.id,
-      -32603,
-      error.message || "Failed to generate prompt"
+      MCPErrors.internalError(error.message || "Failed to generate prompt")
     );
   }
 };
@@ -613,9 +616,10 @@ export const handleResourcesList: MCPHandler = async (context) => {
     await trackError("resource_list_failed", "list");
     return createErrorResponse(
       context.id,
-      -32603,
-      "Failed to list resources",
-      error instanceof Error ? error.message : "Unknown error"
+      MCPErrors.internalError(
+        "Failed to list resources",
+        error instanceof Error ? error.message : "Unknown error"
+      )
     );
   }
 };
@@ -701,16 +705,16 @@ export const handleResourcesRead: MCPHandler = async (context) => {
 
     return createErrorResponse(
       context.id,
-      -32602,
-      `Resource not found: ${uri}`
+      MCPErrors.resourceNotFound("resource", uri)
     );
   } catch (error) {
     await trackError("resource_read_failed", "read");
     return createErrorResponse(
       context.id,
-      -32603,
-      "Failed to read resource",
-      error instanceof Error ? error.message : "Unknown error"
+      MCPErrors.internalError(
+        "Failed to read resource",
+        error instanceof Error ? error.message : "Unknown error"
+      )
     );
   }
 };
@@ -733,21 +737,21 @@ export async function executeMCPMethod(
   method: string,
   context: MCPHandlerContext
 ): Promise<MCPResponse> {
-  const handler = MCP_HANDLERS[method];
+  return withErrorHandling(
+    async () => {
+      const handler = MCP_HANDLERS[method];
+      
+      if (!handler) {
+        throw MCPErrors.methodNotFound(method);
+      }
 
-  if (!handler) {
-    return createErrorResponse(context.id, -32601, `Unknown method: ${method}`);
-  }
-
-  try {
-    return await handler(context);
-  } catch (error: any) {
-    console.error(`MCP Method Error (${method}):`, error);
-    return createErrorResponse(
-      context.id,
-      -32603,
-      "Internal server error",
-      error.message
-    );
-  }
+      return await handler(context);
+    },
+    {
+      operationName: `MCP:${method}`,
+      onError: (error) => {
+        console.error(`MCP Method Error (${method}):`, error);
+      }
+    }
+  );
 }
