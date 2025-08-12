@@ -39,60 +39,66 @@ All errors follow the standard JSON-RPC 2.0 error response format as required by
 
 ### JSON-RPC Standard Codes (-32768 to -32000)
 
-| Code | Name | Description | Usage |
-|------|------|-------------|-------|
-| -32700 | Parse Error | Invalid JSON received | Malformed request body |
-| -32600 | Invalid Request | Invalid request object | Missing required fields |
-| -32601 | Method Not Found | Method does not exist | Unknown MCP method |
-| -32602 | Invalid Params | Invalid method parameters | Missing/wrong type params |
-| -32603 | Internal Error | Internal server error | Unexpected failures |
+| Code   | Name             | Description               | Usage                     |
+| ------ | ---------------- | ------------------------- | ------------------------- |
+| -32700 | Parse Error      | Invalid JSON received     | Malformed request body    |
+| -32600 | Invalid Request  | Invalid request object    | Missing required fields   |
+| -32601 | Method Not Found | Method does not exist     | Unknown MCP method        |
+| -32602 | Invalid Params   | Invalid method parameters | Missing/wrong type params |
+| -32603 | Internal Error   | Internal server error     | Unexpected failures       |
 
 ### MCP Custom Error Codes
 
 #### Authentication & Authorization (-1000 to -1099)
-| Code | Name | Description |
-|------|------|-------------|
-| -1000 | Unauthorized | Missing or invalid authentication |
-| -1001 | Forbidden | Insufficient permissions |
-| -1002 | Token Expired | Authentication token has expired |
-| -1003 | Invalid API Key | V0 API key is invalid or missing |
+
+| Code  | Name            | Description                       |
+| ----- | --------------- | --------------------------------- |
+| -1000 | Unauthorized    | Missing or invalid authentication |
+| -1001 | Forbidden       | Insufficient permissions          |
+| -1002 | Token Expired   | Authentication token has expired  |
+| -1003 | Invalid API Key | V0 API key is invalid or missing  |
 
 #### Resource Errors (-1100 to -1199)
-| Code | Name | Description |
-|------|------|-------------|
-| -1100 | Resource Not Found | Requested resource doesn't exist |
+
+| Code  | Name                   | Description                      |
+| ----- | ---------------------- | -------------------------------- |
+| -1100 | Resource Not Found     | Requested resource doesn't exist |
 | -1101 | Resource Access Denied | No permission to access resource |
-| -1102 | Resource Unavailable | Resource temporarily unavailable |
-| -1103 | Resource Conflict | Resource state conflict |
+| -1102 | Resource Unavailable   | Resource temporarily unavailable |
+| -1103 | Resource Conflict      | Resource state conflict          |
 
 #### Tool Execution (-1200 to -1299)
-| Code | Name | Description |
-|------|------|-------------|
-| -1200 | Tool Not Found | Requested tool doesn't exist |
-| -1201 | Tool Execution Failed | Tool execution error |
-| -1202 | Tool Timeout | Tool execution timed out |
-| -1203 | Tool Invalid Args | Invalid tool arguments |
+
+| Code  | Name                  | Description                  |
+| ----- | --------------------- | ---------------------------- |
+| -1200 | Tool Not Found        | Requested tool doesn't exist |
+| -1201 | Tool Execution Failed | Tool execution error         |
+| -1202 | Tool Timeout          | Tool execution timed out     |
+| -1203 | Tool Invalid Args     | Invalid tool arguments       |
 
 #### V0 API Errors (-1300 to -1399)
-| Code | Name | Description |
-|------|------|-------------|
-| -1300 | V0 API Error | General V0 API error |
-| -1301 | V0 Chat Not Found | Chat ID doesn't exist |
-| -1302 | V0 Rate Limited | V0 API rate limit exceeded |
-| -1303 | V0 Service Unavailable | V0 service is down |
+
+| Code  | Name                   | Description                |
+| ----- | ---------------------- | -------------------------- |
+| -1300 | V0 API Error           | General V0 API error       |
+| -1301 | V0 Chat Not Found      | Chat ID doesn't exist      |
+| -1302 | V0 Rate Limited        | V0 API rate limit exceeded |
+| -1303 | V0 Service Unavailable | V0 service is down         |
 
 #### Streaming Errors (-1400 to -1499)
-| Code | Name | Description |
-|------|------|-------------|
+
+| Code  | Name                    | Description                      |
+| ----- | ----------------------- | -------------------------------- |
 | -1400 | Streaming Not Supported | Method doesn't support streaming |
-| -1401 | Stream Closed | Stream has been closed |
-| -1402 | Stream Error | Error during streaming |
+| -1401 | Stream Closed           | Stream has been closed           |
+| -1402 | Stream Error            | Error during streaming           |
 
 #### Logging Errors (-1500 to -1599)
-| Code | Name | Description |
-|------|------|-------------|
-| -1500 | Invalid Log Level | Invalid log level specified |
-| -1501 | Logging Disabled | Logging is currently disabled |
+
+| Code  | Name              | Description                   |
+| ----- | ----------------- | ----------------------------- |
+| -1500 | Invalid Log Level | Invalid log level specified   |
+| -1501 | Logging Disabled  | Logging is currently disabled |
 
 ## Implementation Architecture
 
@@ -104,13 +110,13 @@ The `MCPError` class extends the standard JavaScript `Error` class with MCP-spec
 
 ```typescript
 export class MCPError extends Error {
-  public readonly code: number;           // JSON-RPC error code
-  public readonly data?: any;            // Additional error context
+  public readonly code: number; // JSON-RPC error code
+  public readonly data?: any; // Additional error context
   public readonly severity: ErrorSeverity; // Error severity level
-  public readonly recoverable: boolean;   // Whether retry is possible
-  
-  toJSONRPC(id?: number | string | null): object
-  toMCPResponse(id: number): object
+  public readonly recoverable: boolean; // Whether retry is possible
+
+  toJSONRPC(id?: number | string | null): object;
+  toMCPResponse(id: number): object;
 }
 ```
 
@@ -118,10 +124,10 @@ export class MCPError extends Error {
 
 ```typescript
 export enum ErrorSeverity {
-  LOW = "low",        // Minor issues, operation continues
-  MEDIUM = "medium",  // Standard errors, operation fails
-  HIGH = "high",      // Serious errors, may affect other operations
-  CRITICAL = "critical" // System-level failures
+  LOW = "low", // Minor issues, operation continues
+  MEDIUM = "medium", // Standard errors, operation fails
+  HIGH = "high", // Serious errors, may affect other operations
+  CRITICAL = "critical", // System-level failures
 }
 ```
 
@@ -135,7 +141,7 @@ export const MCPErrors = {
   invalidParams: (message: string, params?: any) => MCPError,
   resourceNotFound: (resource: string, id?: string) => MCPError,
   // ... 20+ more factory functions
-}
+};
 ```
 
 ### Error Handling Wrapper
@@ -150,11 +156,12 @@ export async function withErrorHandling<T>(
     fallbackError?: MCPError;
     onError?: (error: any) => void;
     sessionId?: string;
-  }
-): Promise<T>
+  },
+): Promise<T>;
 ```
 
 Features:
+
 - Automatic error conversion to MCPError
 - Telemetry tracking for both success and failure
 - Intelligent error pattern matching
@@ -178,11 +185,11 @@ validateEnum<T>(value: string, validValues: T[], paramName: string): T
 export const handleSomeMethod: MCPHandler = async (context) => {
   try {
     const { param } = context.params as { param: string };
-    validateRequired(param, 'param');
-    
+    validateRequired(param, "param");
+
     // Method implementation
     const result = await someOperation();
-    
+
     return createSuccessResponse(context.id, result);
   } catch (error) {
     if (error instanceof MCPError) {
@@ -200,18 +207,18 @@ export const handleToolCall: MCPHandler = async (context) => {
   return withErrorHandling(
     async () => {
       const { name, arguments: args } = context.params;
-      
-      validateRequired(name, 'name');
-      validateType(args, 'object', 'arguments');
-      
+
+      validateRequired(name, "name");
+      validateType(args, "object", "arguments");
+
       const result = await executeTool(name, args);
       return createSuccessResponse(context.id, result);
     },
     {
       operationName: "tools/call",
       sessionId: context.token,
-      onError: (error) => console.error("Tool execution failed:", error)
-    }
+      onError: (error) => console.error("Tool execution failed:", error),
+    },
   );
 };
 ```
@@ -220,13 +227,17 @@ export const handleToolCall: MCPHandler = async (context) => {
 
 ```typescript
 // Validate required parameters
-const chatId = validateRequired(params.chatId, 'chatId');
+const chatId = validateRequired(params.chatId, "chatId");
 
 // Validate parameter types
-const limit = validateType<number>(params.limit, 'number', 'limit');
+const limit = validateType<number>(params.limit, "number", "limit");
 
 // Validate enum values
-const level = validateEnum(params.level, ['debug', 'info', 'warn', 'error'], 'level');
+const level = validateEnum(
+  params.level,
+  ["debug", "info", "warn", "error"],
+  "level",
+);
 ```
 
 ## Error Recovery and Retry Logic
@@ -247,7 +258,7 @@ if (error.recoverable) {
   // Implement retry with exponential backoff
   await retry(operation, {
     maxAttempts: 3,
-    backoff: 'exponential'
+    backoff: "exponential",
   });
 }
 ```
@@ -264,7 +275,7 @@ trackError(`${operationName}_error`, sessionId, {
   errorMessage: error.message,
   errorSeverity: error.severity,
   recoverable: error.recoverable,
-  duration: Date.now() - startTime
+  duration: Date.now() - startTime,
 });
 ```
 
@@ -274,7 +285,7 @@ Successful operations are also tracked for comparison:
 
 ```typescript
 trackError(`${operationName}_success`, sessionId, {
-  duration: Date.now() - startTime
+  duration: Date.now() - startTime,
 });
 ```
 
@@ -293,24 +304,24 @@ trackError(`${operationName}_success`, sessionId, {
 describe("Error Handling", () => {
   it("should return MCP-compliant error for invalid params", async () => {
     const result = await handler({ params: {} });
-    
+
     expect(result).toMatchObject({
       jsonrpc: "2.0",
       id: expect.any(Number),
       error: {
         code: -32602,
         message: expect.stringContaining("Invalid params"),
-        data: expect.any(Object)
-      }
+        data: expect.any(Object),
+      },
     });
   });
-  
+
   it("should handle tool execution failures gracefully", async () => {
     mockToolExecution.mockRejectedValue(new Error("Tool failed"));
     const result = await handleToolCall(context);
-    
+
     expect(result.error.code).toBe(-1201); // TOOL_EXECUTION_FAILED
-    expect(result.error.data).toHaveProperty('toolName');
+    expect(result.error.data).toHaveProperty("toolName");
   });
 });
 ```
@@ -344,8 +355,8 @@ Perform parameter validation before any operations:
 
 ```typescript
 // Validate all params first
-const param1 = validateRequired(params.param1, 'param1');
-const param2 = validateType(params.param2, 'string', 'param2');
+const param1 = validateRequired(params.param1, "param1");
+const param2 = validateType(params.param2, "string", "param2");
 
 // Then perform operations
 const result = await operation(param1, param2);
@@ -354,6 +365,7 @@ const result = await operation(param1, param2);
 ### 4. Use Appropriate Error Severity
 
 Choose severity based on impact:
+
 - **LOW**: Minor issues, user can continue
 - **MEDIUM**: Operation failed but system stable
 - **HIGH**: Serious error affecting functionality
@@ -372,11 +384,13 @@ console.error(`Error in ${operationName}:`, error);
 ### Converting Legacy Error Handling
 
 From:
+
 ```typescript
 return createErrorResponse(id, -32603, "Failed", error.message);
 ```
 
 To:
+
 ```typescript
 return MCPErrors.internalError("Failed", error.message).toMCPResponse(id);
 ```
