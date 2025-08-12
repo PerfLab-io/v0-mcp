@@ -1,10 +1,8 @@
 import { track } from "@vercel/analytics/server";
 
-// Helper function to safely truncate strings
 const truncate = (str: string, length: number = 32): string =>
   str.substring(0, length);
 
-// Auth flow tracking
 export async function trackAuthStarted(clientId: string, scope: string) {
   try {
     await track("mcp_auth_started", {
@@ -38,7 +36,6 @@ export async function trackAuthFailure(clientId: string, errorType: string) {
   }
 }
 
-// MCP tool usage tracking
 export async function trackToolUsage(toolName: string, sessionId: string) {
   try {
     await track("mcp_tool_usage", {
@@ -50,7 +47,6 @@ export async function trackToolUsage(toolName: string, sessionId: string) {
   }
 }
 
-// MCP prompt usage tracking
 export async function trackPromptUsage(promptName: string, sessionId: string) {
   try {
     await track("mcp_prompt_usage", {
@@ -62,7 +58,6 @@ export async function trackPromptUsage(promptName: string, sessionId: string) {
   }
 }
 
-// MCP resource usage tracking
 export async function trackResourceUsage(
   resourceType: string,
   sessionId: string,
@@ -77,7 +72,6 @@ export async function trackResourceUsage(
   }
 }
 
-// Session tracking
 export async function trackSessionStart(clientId: string, sessionId: string) {
   try {
     await track("mcp_session_start", {
@@ -89,7 +83,6 @@ export async function trackSessionStart(clientId: string, sessionId: string) {
   }
 }
 
-// Error tracking
 export async function trackError(errorType: string, context: string) {
   try {
     await track("mcp_error", {
@@ -99,4 +92,55 @@ export async function trackError(errorType: string, context: string) {
   } catch (error) {
     console.error("Failed to track error:", error);
   }
+}
+
+// Client information extraction (generic)
+// Instead of parsing the User-Agent, we simply pass through the client string
+// provided by the connecting client. We still truncate to keep payload sizes small.
+function extractClientString(userAgent: string): string {
+  if (!userAgent) return "unknown";
+  return truncate(userAgent, 128);
+}
+
+export async function trackTransportUsage(
+  sessionId: string,
+  method: string,
+  transportType: "streaming" | "regular",
+  clientString: string,
+  supportsStreaming: boolean,
+) {
+  try {
+    await track("mcp_transport_usage", {
+      sessionId: truncate(sessionId),
+      method: truncate(method),
+      transportType,
+      clientString: truncate(clientString, 128),
+      supportsStreaming,
+    });
+  } catch (error) {
+    console.error("Failed to track transport usage:", error);
+  }
+}
+
+export async function trackStreamingCapabilities(
+  sessionId: string,
+  supportsStreaming: boolean,
+  acceptHeader: string,
+  clientString: string,
+) {
+  try {
+    await track("mcp_streaming_capabilities", {
+      sessionId: truncate(sessionId),
+      supportsStreaming,
+      acceptHeader: truncate(acceptHeader, 64),
+      clientString: truncate(clientString, 128),
+    });
+  } catch (error) {
+    console.error("Failed to track streaming capabilities:", error);
+  }
+}
+
+export function getClientInfoFromRequest(request: Request): string {
+  const userAgent = request.headers.get("User-Agent") || "";
+  return extractClientString(userAgent);
 }

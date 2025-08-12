@@ -14,6 +14,15 @@ export type ChatGetByIdResponse = Awaited<ReturnType<typeof v0.chats.getById>>;
 
 // Extract file types from the responses
 export type V0File = NonNullable<ChatCreateResponse["files"]>[number];
+export type V0ChatFile = V0File;
+
+// Generic result type for v0 operations
+export interface V0Result<T = any> {
+  success: boolean;
+  result?: T;
+  error?: string;
+  rawResponse?: any;
+}
 
 // Session storage types
 export interface SessionFile {

@@ -17,17 +17,17 @@ export async function getChatById(inputs: z.infer<typeof getChatByIdSchema>) {
     // Populate sessionfilestore with files from the chat
     const sessionId = sessionApiKeyStore.getCurrentSessionId();
     if (sessionId && chat.files) {
-      const files = chat.files;
-      // Extract files from all versions of the chat
-      for (const file of files) {
-        if (file.source && file.source.length > 0) {
-          await sessionFileStore.addFilesFromChat(
-            sessionId,
-            inputs.chatId,
-            files,
-            inputs.chatId,
-          );
-        }
+      const files = chat.files.filter(
+        (file) => file.source && file.source.length > 0,
+      );
+
+      if (files.length > 0) {
+        await sessionFileStore.addFilesFromChat(
+          sessionId,
+          inputs.chatId,
+          files,
+          inputs.chatId, // messageId
+        );
       }
     }
 
