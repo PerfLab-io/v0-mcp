@@ -70,7 +70,7 @@ function createErrorResponse(id: number, error: MCPError): MCPErrorResponse {
 
 export const handleInitialize: MCPHandler = async (context) => {
   return createSuccessResponse(context.id, {
-    protocolVersion: "2025-03-26",
+    protocolVersion: "2025-06-18",
     capabilities: {
       resources: {
         subscribe: false,
@@ -88,7 +88,7 @@ export const handleInitialize: MCPHandler = async (context) => {
     },
     serverInfo: {
       name: "v0-mcp",
-      version: "1.0.0",
+      version: "1.1.0",
     },
   });
 };
@@ -129,7 +129,7 @@ export const handleLoggingSetLevel: MCPHandler = async (context) => {
       operationName: "logging/setLevel",
       sessionId: context.token,
       onError: () => trackError("logging_setlevel_failed", context.token),
-    },
+    }
   );
 };
 
@@ -365,7 +365,7 @@ export const handleToolsCall: MCPHandler = async (context) => {
           const sessionId = context.token;
           let sessionFiles = await sessionFileStore.getSessionFiles(sessionId);
           let chatFiles = sessionFiles.filter(
-            (file) => file.chatId === args.chatId,
+            (file) => file.chatId === args.chatId
           );
           if (chatFiles.length === 0) {
             await mcpLogger.debug(context.token, "tool-execution", {
@@ -378,7 +378,7 @@ export const handleToolsCall: MCPHandler = async (context) => {
               await getChatById({ chatId: args.chatId });
               sessionFiles = await sessionFileStore.getSessionFiles(sessionId);
               chatFiles = sessionFiles.filter(
-                (file) => file.chatId === args.chatId,
+                (file) => file.chatId === args.chatId
               );
 
               await mcpLogger.info(context.token, "tool-execution", {
@@ -410,7 +410,7 @@ export const handleToolsCall: MCPHandler = async (context) => {
           if (args.language) {
             chatFiles = chatFiles.filter(
               (file) =>
-                file.file.lang.toLowerCase() === args.language.toLowerCase(),
+                file.file.lang.toLowerCase() === args.language.toLowerCase()
             );
           }
           const files = chatFiles.map((file) => ({
@@ -479,7 +479,7 @@ export const handleToolsCall: MCPHandler = async (context) => {
           timestamp: new Date().toISOString(),
         });
       },
-    },
+    }
   );
 };
 
@@ -501,7 +501,7 @@ export const handlePromptsGet: MCPHandler = async (context) => {
     if (!promptName) {
       return createErrorResponse(
         context.id,
-        MCPErrors.invalidParams("Missing prompt name"),
+        MCPErrors.invalidParams("Missing prompt name")
       );
     }
     await trackPromptUsage(promptName, context.token);
@@ -515,11 +515,11 @@ export const handlePromptsGet: MCPHandler = async (context) => {
   } catch (error: any) {
     await trackError(
       "prompt_generation_failed",
-      context.params?.name || "unknown",
+      context.params?.name || "unknown"
     );
     return createErrorResponse(
       context.id,
-      MCPErrors.internalError(error.message || "Failed to generate prompt"),
+      MCPErrors.internalError(error.message || "Failed to generate prompt")
     );
   }
 };
@@ -574,8 +574,8 @@ export const handleResourcesList: MCPHandler = async (context) => {
       context.id,
       MCPErrors.internalError(
         "Failed to list resources",
-        error instanceof Error ? error.message : "Unknown error",
-      ),
+        error instanceof Error ? error.message : "Unknown error"
+      )
     );
   }
 };
@@ -616,7 +616,7 @@ export const handleResourcesRead: MCPHandler = async (context) => {
       if (chatId) {
         const chatFiles = await sessionFileStore.getChatFiles(
           context.token,
-          chatId,
+          chatId
         );
         const fileList = chatFiles.map((file) => ({
           id: file.id,
@@ -655,7 +655,7 @@ export const handleResourcesRead: MCPHandler = async (context) => {
 
     return createErrorResponse(
       context.id,
-      MCPErrors.resourceNotFound("resource", uri),
+      MCPErrors.resourceNotFound("resource", uri)
     );
   } catch (error) {
     await trackError("resource_read_failed", "read");
@@ -663,8 +663,8 @@ export const handleResourcesRead: MCPHandler = async (context) => {
       context.id,
       MCPErrors.internalError(
         "Failed to read resource",
-        error instanceof Error ? error.message : "Unknown error",
-      ),
+        error instanceof Error ? error.message : "Unknown error"
+      )
     );
   }
 };
@@ -683,7 +683,7 @@ export const MCP_HANDLERS: Record<string, MCPHandler> = {
 
 export async function executeMCPMethod(
   method: string,
-  context: MCPHandlerContext,
+  context: MCPHandlerContext
 ): Promise<MCPResponse> {
   return withErrorHandling(
     async () => {
@@ -701,6 +701,6 @@ export async function executeMCPMethod(
       onError: (error) => {
         console.error(`MCP Method Error (${method}):`, error);
       },
-    },
+    }
   );
 }
