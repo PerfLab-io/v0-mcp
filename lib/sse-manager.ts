@@ -1,4 +1,3 @@
-// SSE Connection Manager for MCP Streamable HTTP Transport
 import type { LogNotification } from "@/types/mcp-logging";
 
 interface SSEWriter {
@@ -20,7 +19,6 @@ class SSEManager {
    * Add a new SSE connection for a session
    */
   addConnection(sessionId: string, writer: SSEWriter): void {
-    // Close existing connection if any
     this.removeConnection(sessionId);
 
     this.connections.set(sessionId, {
@@ -72,7 +70,6 @@ class SSEManager {
         `Failed to send SSE notification to session ${sessionId}:`,
         error,
       );
-      // Remove broken connection
       await this.removeConnection(sessionId);
       return false;
     }
@@ -122,5 +119,4 @@ class SSEManager {
   }
 }
 
-// Export singleton instance
 export const sseManager = new SSEManager();

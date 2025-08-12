@@ -1,5 +1,4 @@
-// MCP-compliant error handling abstraction
-// Implements JSON-RPC 2.0 error specification with MCP-specific extensions
+// MCP-compliant error handling abstraction. Implements JSON-RPC 2.0 error specification with MCP-specific extensions.
 
 import { trackError } from "@/lib/analytics.server";
 
@@ -81,7 +80,7 @@ export class MCPError extends Error {
     message: string,
     data?: any,
     severity: ErrorSeverity = ErrorSeverity.MEDIUM,
-    recoverable: boolean = true,
+    recoverable: boolean = true
   ) {
     super(message);
     this.name = "MCPError";
@@ -133,7 +132,7 @@ export const MCPErrors = {
       "Parse error",
       data,
       ErrorSeverity.HIGH,
-      false,
+      false
     ),
 
   invalidRequest: (data?: any) =>
@@ -142,7 +141,7 @@ export const MCPErrors = {
       "Invalid Request",
       data,
       ErrorSeverity.MEDIUM,
-      true,
+      true
     ),
 
   methodNotFound: (method: string) =>
@@ -151,7 +150,7 @@ export const MCPErrors = {
       `Method not found: ${method}`,
       { method },
       ErrorSeverity.MEDIUM,
-      true,
+      true
     ),
 
   invalidParams: (message: string, params?: any) =>
@@ -160,7 +159,7 @@ export const MCPErrors = {
       `Invalid params: ${message}`,
       { params },
       ErrorSeverity.MEDIUM,
-      true,
+      true
     ),
 
   internalError: (message: string, data?: any) =>
@@ -169,7 +168,7 @@ export const MCPErrors = {
       `Internal error: ${message}`,
       data,
       ErrorSeverity.CRITICAL,
-      false,
+      false
     ),
 
   // MCP-specific errors
@@ -179,7 +178,7 @@ export const MCPErrors = {
       message,
       undefined,
       ErrorSeverity.HIGH,
-      true,
+      true
     ),
 
   tokenExpired: () =>
@@ -188,7 +187,7 @@ export const MCPErrors = {
       "Access token has expired",
       undefined,
       ErrorSeverity.HIGH,
-      true,
+      true
     ),
 
   resourceNotFound: (resource: string, id?: string) =>
@@ -197,7 +196,7 @@ export const MCPErrors = {
       `Resource not found: ${resource}`,
       { resource, id },
       ErrorSeverity.MEDIUM,
-      true,
+      true
     ),
 
   toolExecutionFailed: (toolName: string, error: string) =>
@@ -206,7 +205,7 @@ export const MCPErrors = {
       `Tool execution failed: ${toolName}`,
       { toolName, error },
       ErrorSeverity.MEDIUM,
-      true,
+      true
     ),
 
   v0ApiError: (message: string, statusCode?: number) =>
@@ -215,7 +214,7 @@ export const MCPErrors = {
       `V0 API error: ${message}`,
       { statusCode },
       ErrorSeverity.HIGH,
-      true,
+      true
     ),
 
   v0ChatNotFound: (chatId: string) =>
@@ -224,7 +223,7 @@ export const MCPErrors = {
       `Chat not found: ${chatId}`,
       { chatId },
       ErrorSeverity.MEDIUM,
-      true,
+      true
     ),
 
   streamingNotSupported: (method: string) =>
@@ -233,7 +232,7 @@ export const MCPErrors = {
       `Streaming not supported for method: ${method}`,
       { method },
       ErrorSeverity.LOW,
-      true,
+      true
     ),
 
   invalidLogLevel: (level: string, validLevels: string[]) =>
@@ -242,7 +241,7 @@ export const MCPErrors = {
       `Invalid log level: ${level}`,
       { level, validLevels },
       ErrorSeverity.MEDIUM,
-      true,
+      true
     ),
 };
 
@@ -256,12 +255,11 @@ export async function withErrorHandling<T>(
     fallbackError?: MCPError;
     onError?: (error: any) => void;
     sessionId?: string;
-  },
+  }
 ): Promise<T> {
   try {
     const result = await operation();
 
-    // Track successful operation telemetry
     if (context.sessionId) {
       await trackError(`${context.operationName}_success`, context.sessionId);
     }
@@ -270,23 +268,19 @@ export async function withErrorHandling<T>(
   } catch (error) {
     let mcpError: MCPError;
 
-    // Log the error for debugging
     console.error(`Error in ${context.operationName}:`, error);
 
-    // Call custom error handler if provided
     if (context.onError) {
       context.onError(error);
     }
 
-    // Convert to MCPError if needed
     if (error instanceof MCPError) {
       mcpError = error;
     } else if (error instanceof Error) {
-      // Check for common error patterns
       if (error.message.includes("not found")) {
         mcpError = MCPErrors.resourceNotFound(
           context.operationName,
-          error.message,
+          error.message
         );
       } else if (
         error.message.includes("unauthorized") ||
@@ -299,14 +293,12 @@ export async function withErrorHandling<T>(
       ) {
         mcpError = MCPErrors.invalidParams(error.message);
       } else {
-        // Default to internal error
         mcpError = MCPErrors.internalError(error.message, {
           stack: error.stack,
           originalError: error.name,
         });
       }
     } else {
-      // Fallback for unknown errors
       mcpError =
         context.fallbackError ||
         MCPErrors.internalError(`Unknown error in ${context.operationName}`, {
@@ -314,7 +306,6 @@ export async function withErrorHandling<T>(
         });
     }
 
-    // Track error telemetry with rich context
     if (context.sessionId) {
       await trackError(`${context.operationName}_error`, context.sessionId);
     }
@@ -328,7 +319,7 @@ export async function withErrorHandling<T>(
  */
 export function validateRequired<T>(
   value: T | undefined | null,
-  paramName: string,
+  paramName: string
 ): T {
   if (value === undefined || value === null) {
     throw MCPErrors.invalidParams(`Missing required parameter: ${paramName}`);
@@ -342,13 +333,13 @@ export function validateRequired<T>(
 export function validateType<T>(
   value: any,
   expectedType: string,
-  paramName: string,
+  paramName: string
 ): T {
   const actualType = typeof value;
   if (actualType !== expectedType) {
     throw MCPErrors.invalidParams(
       `Parameter ${paramName} must be ${expectedType}, got ${actualType}`,
-      { expected: expectedType, actual: actualType, value },
+      { expected: expectedType, actual: actualType, value }
     );
   }
   return value as T;
@@ -360,12 +351,12 @@ export function validateType<T>(
 export function validateEnum<T extends string>(
   value: string,
   validValues: readonly T[],
-  paramName: string,
+  paramName: string
 ): T {
   if (!validValues.includes(value as T)) {
     throw MCPErrors.invalidParams(
       `Parameter ${paramName} must be one of: ${validValues.join(", ")}`,
-      { validValues, received: value },
+      { validValues, received: value }
     );
   }
   return value as T;

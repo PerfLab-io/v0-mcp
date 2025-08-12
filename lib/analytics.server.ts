@@ -1,10 +1,8 @@
 import { track } from "@vercel/analytics/server";
 
-// Helper function to safely truncate strings
 const truncate = (str: string, length: number = 32): string =>
   str.substring(0, length);
 
-// Auth flow tracking
 export async function trackAuthStarted(clientId: string, scope: string) {
   try {
     await track("mcp_auth_started", {
@@ -38,7 +36,6 @@ export async function trackAuthFailure(clientId: string, errorType: string) {
   }
 }
 
-// MCP tool usage tracking
 export async function trackToolUsage(toolName: string, sessionId: string) {
   try {
     await track("mcp_tool_usage", {
@@ -50,7 +47,6 @@ export async function trackToolUsage(toolName: string, sessionId: string) {
   }
 }
 
-// MCP prompt usage tracking
 export async function trackPromptUsage(promptName: string, sessionId: string) {
   try {
     await track("mcp_prompt_usage", {
@@ -62,7 +58,6 @@ export async function trackPromptUsage(promptName: string, sessionId: string) {
   }
 }
 
-// MCP resource usage tracking
 export async function trackResourceUsage(
   resourceType: string,
   sessionId: string,
@@ -77,7 +72,6 @@ export async function trackResourceUsage(
   }
 }
 
-// Session tracking
 export async function trackSessionStart(clientId: string, sessionId: string) {
   try {
     await track("mcp_session_start", {
@@ -89,7 +83,6 @@ export async function trackSessionStart(clientId: string, sessionId: string) {
   }
 }
 
-// Error tracking
 export async function trackError(errorType: string, context: string) {
   try {
     await track("mcp_error", {
@@ -109,7 +102,6 @@ function extractClientString(userAgent: string): string {
   return truncate(userAgent, 128);
 }
 
-// Transport telemetry tracking
 export async function trackTransportUsage(
   sessionId: string,
   method: string,
@@ -130,7 +122,6 @@ export async function trackTransportUsage(
   }
 }
 
-// Streaming capabilities tracking
 export async function trackStreamingCapabilities(
   sessionId: string,
   supportsStreaming: boolean,
@@ -149,7 +140,6 @@ export async function trackStreamingCapabilities(
   }
 }
 
-// Helper function to extract client info from request headers
 export function getClientInfoFromRequest(request: Request): string {
   const userAgent = request.headers.get("User-Agent") || "";
   return extractClientString(userAgent);

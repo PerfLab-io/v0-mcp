@@ -11,7 +11,6 @@ import {
 import { sseManager } from "@/lib/sse-manager";
 import { executeMCPMethod, type MCPHandlerContext } from "@/lib/mcp-handlers";
 
-// Create streaming response for MCP streamable HTTP transport
 async function createStreamingResponse(
   body: any,
   token: string,
@@ -23,10 +22,8 @@ async function createStreamingResponse(
     async start(controller) {
       const encoder = new TextEncoder();
 
-      // Track if controller is already closed
       let isClosed = false;
 
-      // Create a writer interface compatible with SSE manager
       const writer = {
         write: async (data: Uint8Array) => {
           if (!isClosed) {
@@ -42,10 +39,8 @@ async function createStreamingResponse(
       };
 
       try {
-        // Add SSE connection to manager
         sseManager.addConnection(token, writer);
 
-        // Create handler context
         const context: MCPHandlerContext = {
           token,
           tokenData,
@@ -53,14 +48,11 @@ async function createStreamingResponse(
           id,
         };
 
-        // Execute MCP method using shared handler
         const result = await executeMCPMethod(method, context);
 
-        // Send the final JSON-RPC response (following MCP streamable HTTP pattern)
         const responseData = `data: ${JSON.stringify(result)}\n\n`;
         await writer.write(encoder.encode(responseData));
 
-        // Close the stream (as per MCP specification)
         await writer.close();
       } catch (error) {
         console.error("Streaming error:", error);
@@ -80,7 +72,6 @@ async function createStreamingResponse(
           console.error("Error closing stream:", closeError);
         }
       } finally {
-        // Clean up SSE connection
         await sseManager.removeConnection(token);
       }
     },
@@ -98,7 +89,6 @@ async function createStreamingResponse(
   });
 }
 
-// Simple MCP server implementation
 export async function POST(request: NextRequest) {
   try {
     const protocol = request.headers.get("x-forwarded-proto") || "https";
@@ -123,7 +113,6 @@ export async function POST(request: NextRequest) {
 
     const token = authHeader.substring(7);
 
-    // Validate token
     const tokenData = await API_KV.get(`access_token:${token}`);
     if (!tokenData) {
       return NextResponse.json(
@@ -135,7 +124,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if token is expired
     if (new Date(tokenData.expiresAt) < new Date()) {
       return NextResponse.json(
         {
@@ -146,7 +134,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Decrypt API key
     const decryptedApiKey = decryptApiKey(
       tokenData.encryptedApiKey,
       tokenData.clientId,
@@ -154,10 +141,8 @@ export async function POST(request: NextRequest) {
     sessionApiKeyStore.setSessionApiKey(token, decryptedApiKey);
     sessionApiKeyStore.setCurrentSession(token);
 
-    // Track session start
     await trackSessionStart(tokenData.clientId, token);
 
-    // Parse MCP request
     const body = await request.json();
     const { method, params, id } = body as {
       method: string;
@@ -165,19 +150,15 @@ export async function POST(request: NextRequest) {
       id?: number;
     };
 
-    // Extract client information from request headers
     const clientInfo = getClientInfoFromRequest(request);
 
-    // Check if client supports streaming (Accept header includes text/event-stream)
     const acceptHeader = request.headers.get("Accept") || "";
     const supportsStreaming = acceptHeader.includes("text/event-stream");
 
-    // Methods that could benefit from streaming (generate logs)
     const streamableMethods = ["logging/setLevel", "tools/call"];
     const shouldStream =
       supportsStreaming && streamableMethods.includes(method);
 
-    // Track streaming capabilities for analytics
     await trackStreamingCapabilities(
       token,
       supportsStreaming,
@@ -194,9 +175,7 @@ export async function POST(request: NextRequest) {
       client: clientInfo,
     });
 
-    // If streaming is requested and supported, create an SSE response
     if (shouldStream) {
-      // Track streaming transport usage
       await trackTransportUsage(
         token,
         method,
@@ -207,7 +186,6 @@ export async function POST(request: NextRequest) {
       return createStreamingResponse(body, token, tokenData);
     }
 
-    // Track regular HTTP transport usage
     await trackTransportUsage(
       token,
       method,
@@ -216,7 +194,6 @@ export async function POST(request: NextRequest) {
       supportsStreaming,
     );
 
-    // Create handler context for regular HTTP
     const context: MCPHandlerContext = {
       token,
       tokenData,
@@ -224,7 +201,6 @@ export async function POST(request: NextRequest) {
       id: id || 0,
     };
 
-    // Execute MCP method using shared handler
     const result = await executeMCPMethod(method, context);
     return NextResponse.json(result);
   } catch (error: any) {

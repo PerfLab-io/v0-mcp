@@ -34,7 +34,6 @@ import {
   validateEnum,
 } from "@/lib/mcp-errors";
 
-// MCP Response types
 export interface MCPSuccess {
   jsonrpc: "2.0";
   id: number;
@@ -53,7 +52,6 @@ export interface MCPErrorResponse {
 
 export type MCPResponse = MCPSuccess | MCPErrorResponse;
 
-// Handler context - contains common data needed by all handlers
 export interface MCPHandlerContext {
   token: string;
   tokenData: any;
@@ -61,12 +59,10 @@ export interface MCPHandlerContext {
   id: number;
 }
 
-// Base handler interface
 export interface MCPHandler {
   (context: MCPHandlerContext): Promise<MCPResponse>;
 }
 
-// Create success response
 function createSuccessResponse(id: number, result: any): MCPSuccess {
   return {
     jsonrpc: "2.0",
@@ -75,12 +71,10 @@ function createSuccessResponse(id: number, result: any): MCPSuccess {
   };
 }
 
-// Create error response using MCP error handling
 function createErrorResponse(id: number, error: MCPError): MCPErrorResponse {
   return error.toMCPResponse(id) as MCPErrorResponse;
 }
 
-// Legacy function for backward compatibility
 function createLegacyErrorResponse(
   id: number,
   code: number,
@@ -91,7 +85,6 @@ function createLegacyErrorResponse(
   return mcpError.toMCPResponse(id) as MCPErrorResponse;
 }
 
-// Initialize handler
 export const handleInitialize: MCPHandler = async (context) => {
   return createSuccessResponse(context.id, {
     protocolVersion: "2025-03-26",
@@ -117,21 +110,15 @@ export const handleInitialize: MCPHandler = async (context) => {
   });
 };
 
-// Notifications/initialized handler
 export const handleNotificationsInitialized: MCPHandler = async (context) => {
   return createSuccessResponse(context.id, {});
 };
 
-// Logging/setLevel handler
 export const handleLoggingSetLevel: MCPHandler = async (context) => {
   return withErrorHandling(
     async () => {
       const { level } = context.params as { level: string };
-
-      // Validate required parameter
       validateRequired(level, "level");
-
-      // Validate log level enum
       if (!isValidLogLevel(level)) {
         const validLevels = [
           "emergency",
@@ -145,12 +132,8 @@ export const handleLoggingSetLevel: MCPHandler = async (context) => {
         ];
         throw MCPErrors.invalidLogLevel(level, validLevels);
       }
-
-      // Use token as session ID
       const sessionId = context.token;
       await mcpLogger.setLogLevel(sessionId, level as LogLevel);
-
-      // Log the level change
       await mcpLogger.info(sessionId, "mcp-server", {
         message: "Log level changed",
         newLevel: level,
@@ -167,7 +150,6 @@ export const handleLoggingSetLevel: MCPHandler = async (context) => {
   );
 };
 
-// Tools/list handler
 export const handleToolsList: MCPHandler = async (context) => {
   return createSuccessResponse(context.id, {
     tools: [
@@ -358,17 +340,12 @@ export const handleToolsList: MCPHandler = async (context) => {
   });
 };
 
-// Tools/call handler
 export const handleToolsCall: MCPHandler = async (context) => {
   return withErrorHandling(
     async () => {
       const toolName = validateRequired(context.params?.name, "name");
       const args = context.params?.arguments || {};
-
-      // Track tool usage
       await trackToolUsage(toolName, context.token);
-
-      // Log tool execution start
       await mcpLogger.debug(context.token, "tool-execution", {
         message: "Tool execution started",
         toolName,
@@ -399,19 +376,14 @@ export const handleToolsCall: MCPHandler = async (context) => {
           result = await favoriteChat(args);
           break;
         case "list_files":
-          // chatId is now required
           const chatId = validateRequired(args.chatId, "chatId");
           validateType(chatId, "string", "chatId");
 
           const sessionId = context.token;
           let sessionFiles = await sessionFileStore.getSessionFiles(sessionId);
-
-          // Filter by the required chatId
           let chatFiles = sessionFiles.filter(
             (file) => file.chatId === args.chatId,
           );
-
-          // If no files found for this chatId, automatically fetch them from v0
           if (chatFiles.length === 0) {
             await mcpLogger.debug(context.token, "tool-execution", {
               message: "No files found for chatId, auto-fetching from v0",
@@ -420,10 +392,7 @@ export const handleToolsCall: MCPHandler = async (context) => {
             });
 
             try {
-              // Use getChatById to populate the file store
               await getChatById({ chatId: args.chatId });
-
-              // Refresh our session files and filter again
               sessionFiles = await sessionFileStore.getSessionFiles(sessionId);
               chatFiles = sessionFiles.filter(
                 (file) => file.chatId === args.chatId,
@@ -455,16 +424,12 @@ export const handleToolsCall: MCPHandler = async (context) => {
               break;
             }
           }
-
-          // Filter by language if provided
           if (args.language) {
             chatFiles = chatFiles.filter(
               (file) =>
                 file.file.lang.toLowerCase() === args.language.toLowerCase(),
             );
           }
-
-          // Format the files for the response
           const files = chatFiles.map((file) => ({
             id: file.id,
             filename:
@@ -477,20 +442,14 @@ export const handleToolsCall: MCPHandler = async (context) => {
             createdAt: file.createdAt,
             messageId: file.messageId,
           }));
-
-          // Build response data
           const responseData: any = {
             files,
             chatId: args.chatId,
             totalFiles: files.length,
           };
-
-          // Add language filter info if used
           if (args.language) {
             responseData.filteredByLanguage = args.language;
           }
-
-          // Include stats if requested
           if (args.includeStats) {
             const stats = await sessionFileStore.getFileStats(sessionId);
             responseData.stats = stats;
@@ -513,7 +472,6 @@ export const handleToolsCall: MCPHandler = async (context) => {
           throw MCPErrors.resourceNotFound("tool", toolName);
       }
 
-      // Log successful tool execution
       await mcpLogger.info(context.token, "tool-execution", {
         message: "Tool execution completed successfully",
         toolName,
@@ -542,7 +500,6 @@ export const handleToolsCall: MCPHandler = async (context) => {
   );
 };
 
-// Prompts/list handler
 export const handlePromptsList: MCPHandler = async (context) => {
   return createSuccessResponse(context.id, {
     prompts: v0Prompts.map((prompt) => ({
@@ -553,7 +510,6 @@ export const handlePromptsList: MCPHandler = async (context) => {
   });
 };
 
-// Prompts/get handler
 export const handlePromptsGet: MCPHandler = async (context) => {
   try {
     const promptName = context.params?.name;
@@ -565,8 +521,6 @@ export const handlePromptsGet: MCPHandler = async (context) => {
         MCPErrors.invalidParams("Missing prompt name"),
       );
     }
-
-    // Track prompt usage
     await trackPromptUsage(promptName, context.token);
 
     const promptContent = await getPromptContent(promptName, promptArgs);
@@ -587,10 +541,8 @@ export const handlePromptsGet: MCPHandler = async (context) => {
   }
 };
 
-// Resources/list handler
 export const handleResourcesList: MCPHandler = async (context) => {
   try {
-    // Track resource usage
     await trackResourceUsage("list", context.token);
 
     const sessionFiles = await sessionFileStore.getSessionFiles(context.token);
@@ -611,7 +563,6 @@ export const handleResourcesList: MCPHandler = async (context) => {
       },
     ];
 
-    // Add last chat resources if available
     if (lastChatId) {
       resources.push({
         uri: `v0://chats/${lastChatId}`,
@@ -620,8 +571,6 @@ export const handleResourcesList: MCPHandler = async (context) => {
         mimeType: "application/json",
       });
     }
-
-    // Add individual file resources
     for (const sessionFile of sessionFiles) {
       const filename =
         sessionFile.file.meta?.filename ||
@@ -648,12 +597,9 @@ export const handleResourcesList: MCPHandler = async (context) => {
   }
 };
 
-// Resources/read handler
 export const handleResourcesRead: MCPHandler = async (context) => {
   try {
     const uri = context.params?.uri;
-
-    // Track resource usage
     await trackResourceUsage("read", context.token);
 
     if (uri === "v0://user/config") {
@@ -682,7 +628,6 @@ export const handleResourcesRead: MCPHandler = async (context) => {
       });
     }
 
-    // Handle chat files
     if (uri?.startsWith("v0://chats/")) {
       const chatId = uri.split("/").pop();
       if (chatId) {
@@ -712,8 +657,6 @@ export const handleResourcesRead: MCPHandler = async (context) => {
         });
       }
     }
-
-    // Handle individual file content
     const sessionFile = sessionFileStore.getFileByUri(uri);
     if (sessionFile) {
       return createSuccessResponse(context.id, {
@@ -743,7 +686,6 @@ export const handleResourcesRead: MCPHandler = async (context) => {
   }
 };
 
-// Method router - maps MCP methods to their handlers
 export const MCP_HANDLERS: Record<string, MCPHandler> = {
   initialize: handleInitialize,
   "notifications/initialized": handleNotificationsInitialized,
@@ -756,7 +698,6 @@ export const MCP_HANDLERS: Record<string, MCPHandler> = {
   "resources/read": handleResourcesRead,
 };
 
-// Execute MCP method with common error handling
 export async function executeMCPMethod(
   method: string,
   context: MCPHandlerContext,

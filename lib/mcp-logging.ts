@@ -1,4 +1,3 @@
-// Core MCP Logging Implementation
 import {
   LogLevel,
   LoggingConfig,
@@ -31,18 +30,15 @@ export class MCPLogger {
       throw new Error(`Invalid log level: ${level}`);
     }
 
-    // Get existing config or create default
     let config = await this.loggingKV.getConfig(sessionId);
 
     if (!config) {
       config = this.createDefaultConfig(sessionId);
     }
 
-    // Update level and timestamp
     config.minLevel = level;
     config.updatedAt = new Date().toISOString();
 
-    // Save with session TTL (24 hours default)
     await this.loggingKV.setConfig(sessionId, config, 86400);
   }
 
@@ -56,15 +52,12 @@ export class MCPLogger {
     data: any,
   ): Promise<boolean> {
     try {
-      // Get session config
       const config = await this.getSessionConfig(sessionId);
 
-      // Check if message should be logged based on level
       if (!shouldLogAtLevel(level, config.minLevel)) {
         return false;
       }
 
-      // Check rate limit
       const rateLimitOk = await this.rateLimiter.checkRateLimit(
         sessionId,
         config.rateLimit.maxMessages,
@@ -72,7 +65,6 @@ export class MCPLogger {
       );
 
       if (!rateLimitOk) {
-        // Log a rate limit warning if we're at INFO level or below
         if (shouldLogAtLevel(LogLevel.WARNING, config.minLevel)) {
           const warningNotification = this.createLogNotification(
             LogLevel.WARNING,
@@ -84,10 +76,8 @@ export class MCPLogger {
         return false;
       }
 
-      // Filter sensitive data
       const safeData = redactSensitiveData(data);
 
-      // Create and send log notification
       const notification = this.createLogNotification(level, logger, safeData);
       await this.sendNotification(notification, sessionId);
 
@@ -107,7 +97,6 @@ export class MCPLogger {
       return shouldLogAtLevel(level, config.minLevel);
     } catch (error) {
       console.error("MCPLogger.shouldLog failed:", error);
-      // Default to INFO level when error occurs
       return shouldLogAtLevel(level, LogLevel.INFO);
     }
   }
@@ -190,7 +179,6 @@ export class MCPLogger {
 
     if (!config) {
       config = this.createDefaultConfig(sessionId);
-      // Save default config with TTL
       await this.loggingKV.setConfig(sessionId, config, 86400);
     }
 
@@ -229,7 +217,6 @@ export class MCPLogger {
     sessionId?: string,
   ): Promise<void> {
     try {
-      // Extract session ID from the notification context if available
       if (!sessionId && notification.params?.data?.sessionId) {
         sessionId = notification.params.data.sessionId;
       }
@@ -239,7 +226,6 @@ export class MCPLogger {
         return;
       }
 
-      // Try to send via active SSE connection first (streamable HTTP)
       const sentViaSSE = await sseManager.sendNotification(
         sessionId,
         notification,
@@ -255,7 +241,6 @@ export class MCPLogger {
       }
     } catch (error) {
       console.error("Failed to send MCP notification:", error);
-      // Fallback to console logging if all else fails
       console.log(
         "MCP Log Notification (fallback):",
         JSON.stringify(notification, null, 2),
@@ -293,5 +278,4 @@ export class MCPLogger {
   }
 }
 
-// Export singleton instance for use across the application
 export const mcpLogger = new MCPLogger();
