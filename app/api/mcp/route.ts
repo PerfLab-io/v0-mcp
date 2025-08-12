@@ -144,10 +144,14 @@ export async function POST(request: NextRequest) {
     await trackSessionStart(tokenData.clientId, token);
 
     const body = await request.json();
-    const { method, params, id } = body as {
+    const {
+      method,
+      params,
+      id = 0,
+    } = body as {
       method: string;
       params?: any;
-      id?: number;
+      id: number;
     };
 
     const clientInfo = getClientInfoFromRequest(request);
@@ -175,30 +179,23 @@ export async function POST(request: NextRequest) {
       client: clientInfo,
     });
 
-    if (shouldStream) {
-      await trackTransportUsage(
-        token,
-        method,
-        "streaming",
-        clientInfo,
-        supportsStreaming,
-      );
-      return createStreamingResponse(body, token, tokenData);
-    }
-
     await trackTransportUsage(
       token,
       method,
-      "regular",
+      shouldStream ? "streaming" : "regular",
       clientInfo,
       supportsStreaming,
     );
+
+    if (shouldStream) {
+      return createStreamingResponse(body, token, tokenData);
+    }
 
     const context: MCPHandlerContext = {
       token,
       tokenData,
       params,
-      id: id || 0,
+      id,
     };
 
     const result = await executeMCPMethod(method, context);
