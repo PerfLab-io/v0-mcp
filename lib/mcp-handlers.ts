@@ -1,8 +1,3 @@
-// MCP Method Handlers - Common logic for both streaming and regular HTTP
-import { NextResponse } from "next/server";
-import { API_KV } from "@/lib/kv-storage";
-import { decryptApiKey } from "@/lib/crypto";
-import { sessionApiKeyStore } from "@/v0/client";
 import {
   createChat,
   getUserInfo,
@@ -10,7 +5,6 @@ import {
   createMessage,
   findChats,
   favoriteChat,
-  listFiles,
   getChatById,
   initChat,
 } from "@/v0/index";
@@ -31,7 +25,6 @@ import {
   withErrorHandling,
   validateRequired,
   validateType,
-  validateEnum,
 } from "@/lib/mcp-errors";
 
 export interface MCPSuccess {
@@ -73,16 +66,6 @@ function createSuccessResponse(id: number, result: any): MCPSuccess {
 
 function createErrorResponse(id: number, error: MCPError): MCPErrorResponse {
   return error.toMCPResponse(id) as MCPErrorResponse;
-}
-
-function createLegacyErrorResponse(
-  id: number,
-  code: number,
-  message: string,
-  data?: any,
-): MCPErrorResponse {
-  const mcpError = new MCPError(code, message, data);
-  return mcpError.toMCPResponse(id) as MCPErrorResponse;
 }
 
 export const handleInitialize: MCPHandler = async (context) => {

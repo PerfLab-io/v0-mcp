@@ -1,7 +1,6 @@
 import {
   LogLevel,
   LoggingConfig,
-  MCPLogMessage,
   LogNotification,
   DEFAULT_LOGGING_CONFIG,
   isValidLogLevel,
