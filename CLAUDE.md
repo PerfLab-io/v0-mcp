@@ -64,6 +64,37 @@ The server exposes v0.dev capabilities through MCP tools:
 - Based on MCP reference server but adapted for Hono framework
 - Includes OTEL telemetry for usage analytics and intelligence gathering
 
+### Error Handling
+
+The server implements comprehensive MCP-compliant error handling through a dedicated abstraction layer (`lib/mcp-errors.ts`):
+
+#### **MCP Compliance**
+- Full JSON-RPC 2.0 error format compliance
+- Standardized error codes using reserved ranges
+- Rich error context with data field for debugging
+- Error severity and recoverability indicators
+
+#### **Error Code System**
+- **JSON-RPC Standard** (`-32700` to `-32603`): Parse, invalid request, method not found, invalid params, internal errors
+- **MCP Custom Ranges**:
+  - Authentication (`-1000` to `-1099`): Unauthorized, forbidden, token expired
+  - Resources (`-1100` to `-1199`): Not found, access denied, unavailable
+  - Tool Execution (`-1200` to `-1299`): Tool errors and timeouts
+  - V0 API (`-1300` to `-1399`): API errors, rate limiting
+  - Streaming (`-1400` to `-1499`): Stream management errors
+  - Logging (`-1500` to `-1599`): Log level and configuration errors
+
+#### **Error Handling Patterns**
+- `withErrorHandling()` wrapper for consistent error processing
+- Automatic error conversion and telemetry tracking
+- Validation helpers with clear error messages
+- Factory functions for common error types
+
+#### **Testing Coverage**
+- 95%+ test coverage of error paths
+- Comprehensive error scenario testing
+- MCP compliance validation in tests
+
 ## Important Notes
 
 - Use pnpm for package management
