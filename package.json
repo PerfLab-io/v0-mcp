@@ -65,7 +65,7 @@
     "sonner": "^1.7.1",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
-    "v0-sdk": "^0.2.2",
+    "v0-sdk": "^0.7.1",
     "vaul": "^0.9.6",
     "zod": "^3.25.76"
   },
