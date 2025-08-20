@@ -48,10 +48,12 @@ export async function getChatById(inputs: z.infer<typeof getChatByIdSchema>) {
           text: `Chat Details:
 
 ID: ${chat.id}
-Title: ${chat.title || "Untitled"}
+Name: ${chat.name || "Untitled"}
 Privacy: ${chat.privacy}
 Favorite: ${chat.favorite ? "Yes" : "No"}
 Updated: ${chat.updatedAt}
+Chat URL: ${chat.webUrl}
+Demo URL: ${chat.latestVersion?.demoUrl}
 
 Versions:
 ${versionsInfo}
