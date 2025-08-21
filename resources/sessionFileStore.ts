@@ -1,5 +1,11 @@
 import { API_KV } from "@/lib/kv-storage";
-import { V0File, SessionFile, SessionData, FileStats } from "@/v0/types";
+import {
+  V0File,
+  V0LatestVersionFile,
+  SessionFile,
+  SessionData,
+  FileStats,
+} from "@/v0/types";
 
 class SessionFileStore {
   private static instance: SessionFileStore;
@@ -17,8 +23,9 @@ class SessionFileStore {
   async addFilesFromChat(
     sessionId: string,
     chatId: string,
-    files: V0File[],
+    files: (V0File | V0LatestVersionFile)[],
     messageId?: string,
+    isLatestVersion: boolean = false,
   ): Promise<SessionFile[]> {
     // Update last chat ID
     await this.setLastChatId(sessionId, chatId);
@@ -26,15 +33,26 @@ class SessionFileStore {
     const addedFiles: SessionFile[] = [];
 
     for (const file of files) {
+      // Handle both old V0File format and new V0LatestVersionFile format
+      const fileContent = "content" in file ? file.content : file.source;
+      const fileLang =
+        "name" in file ? this.getLanguageFromFileName(file.name) : file.lang;
+
       // Create unique file identifier based on content hash to avoid duplicates
-      const contentHash = this.hashContent(file.source);
+      const contentHash = this.hashContent(fileContent);
       const fileId = `${chatId}_${contentHash}`;
       const uri = `v0://session/${sessionId}/files/${fileId}`;
 
       // Check if file already exists in session
-      const existingFile = sessionFileList.find(
-        (sf) => sf.file.source === file.source && sf.file.lang === file.lang,
-      );
+      const existingFile = sessionFileList.find((sf) => {
+        const sfContent =
+          "content" in sf.file ? sf.file.content : sf.file.source;
+        const sfLang =
+          "name" in sf.file
+            ? this.getLanguageFromFileName(sf.file.name)
+            : sf.file.lang;
+        return sfContent === fileContent && sfLang === fileLang;
+      });
 
       if (!existingFile) {
         const sessionFile: SessionFile = {
@@ -45,6 +63,7 @@ class SessionFileStore {
           file,
           createdAt: new Date(),
           uri,
+          isLatestVersion,
         };
 
         sessionFileList.push(sessionFile);
@@ -108,7 +127,11 @@ class SessionFileStore {
     const byChatId: Record<string, number> = {};
 
     for (const file of files) {
-      byLanguage[file.file.lang] = (byLanguage[file.file.lang] || 0) + 1;
+      const lang =
+        "name" in file.file
+          ? this.getLanguageFromFileName(file.file.name)
+          : file.file.lang;
+      byLanguage[lang] = (byLanguage[lang] || 0) + 1;
       byChatId[file.chatId] = (byChatId[file.chatId] || 0) + 1;
     }
 
@@ -194,6 +217,49 @@ class SessionFileStore {
       hash = hash & hash; // Convert to 32-bit integer
     }
     return Math.abs(hash).toString(36);
+  }
+
+  private getLanguageFromFileName(fileName: string): string {
+    const ext = fileName.split(".").pop()?.toLowerCase();
+    const extMap: Record<string, string> = {
+      js: "javascript",
+      jsx: "javascript",
+      ts: "typescript",
+      tsx: "typescript",
+      py: "python",
+      rb: "ruby",
+      go: "go",
+      java: "java",
+      cpp: "cpp",
+      c: "c",
+      cs: "csharp",
+      php: "php",
+      swift: "swift",
+      kt: "kotlin",
+      rs: "rust",
+      html: "html",
+      css: "css",
+      scss: "scss",
+      sass: "sass",
+      less: "less",
+      json: "json",
+      xml: "xml",
+      yaml: "yaml",
+      yml: "yaml",
+      md: "markdown",
+      sh: "bash",
+      bash: "bash",
+      zsh: "bash",
+      fish: "bash",
+      ps1: "powershell",
+      sql: "sql",
+      vue: "vue",
+      svelte: "svelte",
+      txt: "text",
+      svg: "svg",
+      mdx: "markdown",
+    };
+    return extMap[ext || ""] || ext || "text";
   }
 }
 

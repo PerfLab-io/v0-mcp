@@ -16,6 +16,11 @@ export type ChatGetByIdResponse = Awaited<ReturnType<typeof v0.chats.getById>>;
 export type V0File = NonNullable<ChatCreateResponse["files"]>[number];
 export type V0ChatFile = V0File;
 
+// New file structure from latestVersion
+export type V0LatestVersionFile = NonNullable<
+  ChatCreateResponse["latestVersion"]
+>["files"][number];
+
 // Generic result type for v0 operations
 export interface V0Result<T = any> {
   success: boolean;
@@ -30,9 +35,10 @@ export interface SessionFile {
   sessionId: string;
   chatId: string;
   messageId?: string;
-  file: V0File;
+  file: V0File | V0LatestVersionFile; // Support both old and new file formats
   createdAt: Date;
   uri: string; // MCP resource URI
+  isLatestVersion?: boolean; // Flag to indicate if from latestVersion
 }
 
 export interface FileStats {
