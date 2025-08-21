@@ -29,13 +29,18 @@ export interface V0Result<T = any> {
   rawResponse?: any;
 }
 
+// Normalized file structure that matches V0LatestVersionFile
+export interface NormalizedFile extends V0LatestVersionFile {
+  language?: string; // Inferred from extension or original lang field
+}
+
 // Session storage types
 export interface SessionFile {
   id: string;
   sessionId: string;
   chatId: string;
   messageId?: string;
-  file: V0File | V0LatestVersionFile; // Support both old and new file formats
+  file: NormalizedFile; // Always use normalized structure
   createdAt: Date;
   uri: string; // MCP resource URI
   isLatestVersion?: boolean; // Flag to indicate if from latestVersion

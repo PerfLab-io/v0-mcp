@@ -2,6 +2,7 @@ import { API_KV } from "@/lib/kv-storage";
 import {
   V0File,
   V0LatestVersionFile,
+  NormalizedFile,
   SessionFile,
   SessionData,
   FileStats,
@@ -33,25 +34,20 @@ class SessionFileStore {
     const addedFiles: SessionFile[] = [];
 
     for (const file of files) {
-      // Handle both old V0File format and new V0LatestVersionFile format
-      const fileContent = "content" in file ? file.content : file.source;
-      const fileLang =
-        "name" in file ? this.getLanguageFromFileName(file.name) : file.lang;
+      // Normalize the file to our standard structure
+      const normalizedFile = this.normalizeFile(file);
 
       // Create unique file identifier based on content hash to avoid duplicates
-      const contentHash = this.hashContent(fileContent);
+      const contentHash = this.hashContent(normalizedFile.content);
       const fileId = `${chatId}_${contentHash}`;
       const uri = `v0://session/${sessionId}/files/${fileId}`;
 
       // Check if file already exists in session
       const existingFile = sessionFileList.find((sf) => {
-        const sfContent =
-          "content" in sf.file ? sf.file.content : sf.file.source;
-        const sfLang =
-          "name" in sf.file
-            ? this.getLanguageFromFileName(sf.file.name)
-            : sf.file.lang;
-        return sfContent === fileContent && sfLang === fileLang;
+        return (
+          sf.file.content === normalizedFile.content &&
+          sf.file.language === normalizedFile.language
+        );
       });
 
       if (!existingFile) {
@@ -60,7 +56,7 @@ class SessionFileStore {
           sessionId,
           chatId,
           messageId,
-          file,
+          file: normalizedFile,
           createdAt: new Date(),
           uri,
           isLatestVersion,
@@ -128,9 +124,7 @@ class SessionFileStore {
 
     for (const file of files) {
       const lang =
-        "name" in file.file
-          ? this.getLanguageFromFileName(file.file.name)
-          : file.file.lang;
+        file.file.language || this.getLanguageFromFileName(file.file.name);
       byLanguage[lang] = (byLanguage[lang] || 0) + 1;
       byChatId[file.chatId] = (byChatId[file.chatId] || 0) + 1;
     }
@@ -217,6 +211,83 @@ class SessionFileStore {
       hash = hash & hash; // Convert to 32-bit integer
     }
     return Math.abs(hash).toString(36);
+  }
+
+  private normalizeFile(file: V0File | V0LatestVersionFile): NormalizedFile {
+    if (this.isLatestVersionFile(file)) {
+      // Already in the new format, just ensure language is set
+      return {
+        object: "file",
+        name: file.name,
+        content: file.content,
+        locked: file.locked,
+        language: this.getLanguageFromFileName(file.name),
+      };
+    } else {
+      // Legacy format - normalize it
+      const oldFile = file as V0File;
+      const fileName = this.inferFileName(oldFile);
+
+      return {
+        object: "file",
+        name: fileName,
+        content: oldFile.source,
+        locked: false, // Legacy files default to unlocked
+        language: oldFile.lang,
+      };
+    }
+  }
+
+  private isLatestVersionFile(file: any): file is V0LatestVersionFile {
+    return (
+      file &&
+      typeof file === "object" &&
+      "object" in file &&
+      file.object === "file"
+    );
+  }
+
+  private inferFileName(file: V0File): string {
+    // Try to get filename from meta
+    if (file.meta?.filename) {
+      return file.meta.filename;
+    }
+
+    // Generate a reasonable filename based on language
+    const langToExt: Record<string, string> = {
+      javascript: "js",
+      typescript: "ts",
+      python: "py",
+      ruby: "rb",
+      go: "go",
+      java: "java",
+      cpp: "cpp",
+      c: "c",
+      csharp: "cs",
+      php: "php",
+      swift: "swift",
+      kotlin: "kt",
+      rust: "rs",
+      html: "html",
+      css: "css",
+      scss: "scss",
+      sass: "sass",
+      less: "less",
+      json: "json",
+      xml: "xml",
+      yaml: "yaml",
+      markdown: "md",
+      bash: "sh",
+      powershell: "ps1",
+      sql: "sql",
+      vue: "vue",
+      svelte: "svelte",
+      text: "txt",
+    };
+
+    const ext = langToExt[file.lang] || file.lang;
+    // Generate a simple filename with timestamp to ensure uniqueness
+    return `file_${Date.now()}.${ext}`;
   }
 
   private getLanguageFromFileName(fileName: string): string {

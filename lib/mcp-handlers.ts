@@ -26,7 +26,6 @@ import {
   validateRequired,
   validateType,
 } from "@/lib/mcp-errors";
-import { V0LatestVersionFile } from "@/v0/types";
 
 export interface MCPSuccess {
   jsonrpc: "2.0";
@@ -96,16 +95,6 @@ function getLanguageFromFileName(fileName: string): string {
     svelte: "svelte",
   };
   return extMap[ext || ""] || ext || "text";
-}
-
-// Type guard to check if file is V0LatestVersionFile
-function isLatestVersionFile(file: any): file is V0LatestVersionFile {
-  return (
-    file &&
-    typeof file === "object" &&
-    "object" in file &&
-    file.object === "file"
-  );
 }
 
 function createSuccessResponse(id: number, result: any): MCPSuccess {
@@ -463,47 +452,26 @@ export const handleToolsCall: MCPHandler = async (context) => {
           if (args.language) {
             chatFiles = chatFiles.filter((file) => {
               const fileLang =
-                "name" in file.file
-                  ? getLanguageFromFileName(file.file.name)
-                  : file.file.lang;
+                file.file.language || getLanguageFromFileName(file.file.name);
               return fileLang.toLowerCase() === args.language.toLowerCase();
             });
           }
 
           const files = chatFiles.map((file) => {
-            // Handle both V0File and V0LatestVersionFile formats
-            if (isLatestVersionFile(file.file)) {
-              // New format from latestVersion
-              return {
-                id: file.id,
-                filename: file.file.name,
-                language: getLanguageFromFileName(file.file.name),
-                source: file.file.content,
-                chatId: file.chatId,
-                uri: file.uri,
-                createdAt: file.createdAt,
-                messageId: file.messageId,
-                locked: file.file.locked,
-                isFromLatestVersion: file.isLatestVersion || false,
-              };
-            } else {
-              // Old format
-              const oldFile = file.file as any;
-              return {
-                id: file.id,
-                filename:
-                  oldFile.meta?.filename ||
-                  `${oldFile.lang}_file_${file.id.slice(-8)}`,
-                language: oldFile.lang,
-                source: oldFile.source,
-                chatId: file.chatId,
-                uri: file.uri,
-                createdAt: file.createdAt,
-                messageId: file.messageId,
-                locked: false,
-                isFromLatestVersion: file.isLatestVersion || false,
-              };
-            }
+            // All files are now normalized to the same structure
+            return {
+              id: file.id,
+              filename: file.file.name,
+              language:
+                file.file.language || getLanguageFromFileName(file.file.name),
+              source: file.file.content,
+              chatId: file.chatId,
+              uri: file.uri,
+              createdAt: file.createdAt,
+              messageId: file.messageId,
+              locked: file.file.locked,
+              isFromLatestVersion: file.isLatestVersion || false,
+            };
           });
           const responseData: any = {
             files,
@@ -635,27 +603,17 @@ export const handleResourcesList: MCPHandler = async (context) => {
       });
     }
     for (const sessionFile of sessionFiles) {
-      if (isLatestVersionFile(sessionFile.file)) {
-        // New format from latestVersion
-        resources.push({
-          uri: sessionFile.uri,
-          name: sessionFile.file.name,
-          description: `${getLanguageFromFileName(sessionFile.file.name)} file from chat ${sessionFile.chatId}`,
-          mimeType: getMimeType(getLanguageFromFileName(sessionFile.file.name)),
-        });
-      } else {
-        // Old format
-        const oldFile = sessionFile.file as any;
-        const filename =
-          oldFile.meta?.filename ||
-          `${oldFile.lang}_file_${sessionFile.id.slice(-8)}`;
-        resources.push({
-          uri: sessionFile.uri,
-          name: filename,
-          description: `${oldFile.lang} file from chat ${sessionFile.chatId}`,
-          mimeType: getMimeType(oldFile.lang),
-        });
-      }
+      // All files are now normalized to the same structure
+      const language =
+        sessionFile.file.language ||
+        getLanguageFromFileName(sessionFile.file.name);
+      const lockStatus = sessionFile.file.locked ? " (locked)" : "";
+      resources.push({
+        uri: sessionFile.uri,
+        name: sessionFile.file.name,
+        description: `${language} file from chat ${sessionFile.chatId}${lockStatus}`,
+        mimeType: getMimeType(language),
+      });
     }
 
     return createSuccessResponse(context.id, { resources });
@@ -710,30 +668,17 @@ export const handleResourcesRead: MCPHandler = async (context) => {
           chatId,
         );
         const fileList = chatFiles.map((file) => {
-          if (isLatestVersionFile(file.file)) {
-            // New format from latestVersion
-            return {
-              id: file.id,
-              filename: file.file.name,
-              language: getLanguageFromFileName(file.file.name),
-              uri: file.uri,
-              createdAt: file.createdAt,
-              messageId: file.messageId,
-            };
-          } else {
-            // Old format
-            const oldFile = file.file as any;
-            return {
-              id: file.id,
-              filename:
-                oldFile.meta?.filename ||
-                `${oldFile.lang}_file_${file.id.slice(-8)}`,
-              language: oldFile.lang,
-              uri: file.uri,
-              createdAt: file.createdAt,
-              messageId: file.messageId,
-            };
-          }
+          // All files are now normalized to the same structure
+          return {
+            id: file.id,
+            filename: file.file.name,
+            language:
+              file.file.language || getLanguageFromFileName(file.file.name),
+            uri: file.uri,
+            createdAt: file.createdAt,
+            messageId: file.messageId,
+            locked: file.file.locked,
+          };
         });
 
         return createSuccessResponse(context.id, {
@@ -747,34 +692,35 @@ export const handleResourcesRead: MCPHandler = async (context) => {
         });
       }
     }
+
     const sessionFile = sessionFileStore.getFileByUri(uri);
     if (sessionFile) {
-      if (isLatestVersionFile(sessionFile.file)) {
-        // New format from latestVersion
-        return createSuccessResponse(context.id, {
-          contents: [
-            {
-              uri,
-              mimeType: getMimeType(
-                getLanguageFromFileName(sessionFile.file.name),
-              ),
-              text: sessionFile.file.content,
-            },
-          ],
-        });
-      } else {
-        // Old format
-        const oldFile = sessionFile.file as any;
-        return createSuccessResponse(context.id, {
-          contents: [
-            {
-              uri,
-              mimeType: getMimeType(oldFile.lang),
-              text: oldFile.source,
-            },
-          ],
-        });
-      }
+      // All files are now normalized to the same structure
+      const language =
+        sessionFile.file.language ||
+        getLanguageFromFileName(sessionFile.file.name);
+
+      // Create file content with metadata header
+      const contentWithMetadata = `/* File Metadata:
+ * Name: ${sessionFile.file.name}
+ * Language: ${language}
+ * Locked: ${sessionFile.file.locked ? "Yes" : "No"}
+ * Chat ID: ${sessionFile.chatId}
+ * Created: ${sessionFile.createdAt.toISOString()}
+ * URI: ${sessionFile.uri}
+ */
+
+${sessionFile.file.content}`;
+
+      return createSuccessResponse(context.id, {
+        contents: [
+          {
+            uri,
+            mimeType: getMimeType(language),
+            text: contentWithMetadata,
+          },
+        ],
+      });
     }
 
     return createErrorResponse(
