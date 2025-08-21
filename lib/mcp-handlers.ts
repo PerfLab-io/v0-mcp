@@ -717,7 +717,7 @@ ${sessionFile.file.content}`;
           {
             uri,
             mimeType: getMimeType(language),
-            text: contentWithMetadata,
+            text: sessionFile.file.content,
           },
         ],
       });
