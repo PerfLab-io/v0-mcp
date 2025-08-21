@@ -26,7 +26,7 @@ export async function getChatById(inputs: z.infer<typeof getChatByIdSchema>) {
           sessionId,
           inputs.chatId,
           files,
-          inputs.chatId, // messageId
+          inputs.chatId,
         );
       }
     }

@@ -27,10 +27,12 @@ export async function findChats(inputs: z.infer<typeof findChatsSchema>) {
       .map(
         (chat) =>
           `- Chat ID: ${chat.id}
-  Title: ${chat.title || "Untitled"}
+  Title: ${chat.name || "Untitled"}
   Privacy: ${chat.privacy}
   Favorite: ${chat.favorite ? "Yes" : "No"}
   Updated: ${chat.updatedAt}
+  Chat URL: ${chat.webUrl}
+  Demo URL: ${chat.latestVersion?.demoUrl}
   ${
     chat.latestVersion
       ? `Latest Version: ${chat.latestVersion.id} (${chat.latestVersion.status})`
