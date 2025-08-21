@@ -41,29 +41,49 @@ export async function initChat(inputs: z.infer<typeof initChatSchema>) {
     }));
 
     const chat = await client.chats.init({
+      type: "files",
       files,
       chatPrivacy: inputs.chatPrivacy,
       projectId: inputs.projectId,
-    });
+    } as any);
 
-    // Store files in session file store
+    // Store files in session file store - prefer latestVersion.files if available
     const sessionId = sessionApiKeyStore.getCurrentSessionId();
-    if (sessionId && chat.files) {
-      await sessionFileStore.addFilesFromChat(
-        sessionId,
-        chat.id,
-        chat.files,
-        chat.id,
-      );
+
+    if (sessionId) {
+      if (chat.latestVersion?.files && chat.latestVersion.files.length > 0) {
+        await sessionFileStore.addFilesFromChat(
+          sessionId,
+          chat.id,
+          chat.latestVersion.files,
+          chat.id,
+          true,
+        );
+      } else if (chat.files && chat.files.length > 0) {
+        await sessionFileStore.addFilesFromChat(
+          sessionId,
+          chat.id,
+          chat.files,
+          chat.id,
+          false,
+        );
+      }
     }
 
-    // Format the response
-    const filesInfo =
-      chat.files
-        ?.map(
-          (file) => `  - ${file.lang} file (${file.source?.length || 0} chars)`,
-        )
-        .join("\n") || "No files available";
+    // Format the response - prefer latestVersion.files if available
+    const filesInfo = chat.latestVersion?.files
+      ? chat.latestVersion.files
+          .map(
+            (file) =>
+              `  - ${file.name} (${file.content?.length || 0} chars, locked: ${file.locked})`,
+          )
+          .join("\n")
+      : chat.files
+          ?.map(
+            (file) =>
+              `  - ${file.lang} file (${file.source?.length || 0} chars)`,
+          )
+          .join("\n") || "No files available";
 
     const result = {
       content: [
@@ -72,16 +92,17 @@ export async function initChat(inputs: z.infer<typeof initChatSchema>) {
           text: `Chat initialized successfully!
 
 ID: ${chat.id}
-Title: ${chat.title || "Untitled"}
+Title: ${chat.name || "Untitled"}
 Privacy: ${chat.privacy}
-URL: ${chat.url}
+Chat URL: ${chat.webUrl}
+Demo URL: ${chat.latestVersion?.demoUrl}
 Shareable: ${chat.shareable ? "Yes" : "No"}
 Updated: ${chat.updatedAt}
 
 Files:
 ${filesInfo}
 
-Total Files: ${chat.files?.length || 0}
+Total Files: ${chat.latestVersion?.files?.length || chat.files?.length || 0}
 Messages: ${chat.messages?.length || 0}
 
 💡 Tip: Use list_files with chatId "${chat.id}" to see the extracted files.`,

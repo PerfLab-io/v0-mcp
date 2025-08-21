@@ -29,15 +29,33 @@ export async function createChat(inputs: z.infer<typeof createChatSchema>) {
     const client = v0ClientManager.getClient();
     const chat = await client.chats.create(inputs);
 
-    // Store files and last chat ID
+    // Store files and last chat ID - prefer latestVersion.files if available
     const sessionId = sessionApiKeyStore.getCurrentSessionId();
-    if (sessionId && chat.files && chat.files.length > 0) {
-      await sessionFileStore.addFilesFromChat(sessionId, chat.id, chat.files);
+    if (sessionId) {
+      if (chat.latestVersion?.files && chat.latestVersion.files.length > 0) {
+        await sessionFileStore.addFilesFromChat(
+          sessionId,
+          chat.id,
+          chat.latestVersion.files,
+          undefined,
+          true,
+        );
+      } else if (chat.files && chat.files.length > 0) {
+        await sessionFileStore.addFilesFromChat(
+          sessionId,
+          chat.id,
+          chat.files,
+          undefined,
+          false,
+        );
+      }
     }
 
+    const fileCount =
+      chat.latestVersion?.files?.length || chat.files?.length || 0;
     const fileInfo =
-      chat.files && chat.files.length > 0
-        ? `\n📁 Generated ${chat.files.length} file(s) - use list_files tool to view them or access via MCP resources`
+      fileCount > 0
+        ? `\n📁 Generated ${fileCount} file(s) - use list_files tool to view them or access via MCP resources`
         : "";
 
     const result = {
